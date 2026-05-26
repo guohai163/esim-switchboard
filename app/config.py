@@ -18,8 +18,10 @@ class AppConfig:
     adb_reconnect_delay_seconds: float
     default_page_size: int
     max_page_size: int
+    sms_log_buffers: tuple[str, ...]
     sms_log_tags: tuple[str, ...]
     sms_log_trigger_keywords: tuple[str, ...]
+    sms_event_poll_interval_seconds: float
     switch_screenshot_dir: Path
     switch_step_delay_seconds: float
     switch_confirm_wait_seconds: float
@@ -46,19 +48,40 @@ class AppConfig:
             adb_reconnect_delay_seconds=float(os.getenv("ADB_RECONNECT_DELAY_SECONDS", "5")),
             default_page_size=int(os.getenv("DEFAULT_PAGE_SIZE", "50")),
             max_page_size=int(os.getenv("MAX_PAGE_SIZE", "200")),
-            sms_log_tags=(
-                "SmsBroadcastReceiver",
-                "SmsMessage",
-                "TelephonyProvider",
-                "MmsSmsProvider",
+            sms_log_buffers=_parse_env_tuple("SMS_LOG_BUFFERS", ("radio",)),
+            sms_log_tags=_parse_env_tuple(
+                "SMS_LOG_TAGS",
+                (
+                    "RILJ",
+                    "GsmInboundSmsHandler",
+                    "SmsBroadcastReceiver",
+                    "SmsMessage",
+                    "TelephonyProvider",
+                    "MmsSmsProvider",
+                ),
             ),
-            sms_log_trigger_keywords=(
-                "sms_received",
-                "saving message",
-                "insertsms",
-                "smsbroadcastreceiver",
-                "mmssmsprovider",
+            sms_log_trigger_keywords=_parse_env_tuple(
+                "SMS_LOG_TRIGGER_KEYWORDS",
+                (
+                    "unsol_response_new_sms",
+                    "event_new_sms",
+                    "android.provider.telephony.sms_received",
+                    "delivering sms to",
+                    "ordered broadcast completed for android.provider.telephony.sms_received",
+                    "successful broadcast, deleting from raw table",
+                    "sms_received",
+                    "saving message",
+                    "insertsms",
+                    "smsbroadcastreceiver",
+                    "mmssmsprovider",
+                    "inboundsmshandler",
+                    "dispatchsmsdeliveryintent",
+                    "sms deliver",
+                    "sms deliver action",
+                    "added message to uri",
+                ),
             ),
+            sms_event_poll_interval_seconds=float(os.getenv("SMS_EVENT_POLL_INTERVAL_SECONDS", "12")),
             switch_screenshot_dir=Path(os.getenv("SWITCH_SCREENSHOT_DIR", resolved_base_dir / "runtime" / "switch_screenshots")),
             switch_step_delay_seconds=float(os.getenv("SWITCH_STEP_DELAY_SECONDS", "1")),
             switch_confirm_wait_seconds=float(os.getenv("SWITCH_CONFIRM_WAIT_SECONDS", "10")),
@@ -69,3 +92,14 @@ class AppConfig:
             app_auth_cookie_name=app_auth_cookie_name,
             app_auth_cookie_value=app_auth_cookie_value,
         )
+
+
+def _parse_env_tuple(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    """Allow comma/newline separated overrides while keeping stable defaults."""
+
+    raw_value = os.getenv(name)
+    if not raw_value:
+        return default
+    values = [item.strip() for item in raw_value.replace("\n", ",").split(",")]
+    normalized = tuple(item for item in values if item)
+    return normalized or default

@@ -76,6 +76,19 @@ class SmsListResponse(BaseModel):
     items: list[SmsMessageOut]
 
 
+class SmsEventStatusResponse(BaseModel):
+    event_type: str | None = None
+    occurred_at: str | None = None
+    inserted_count: int = 0
+    fetched_count: int = 0
+    latest_sms_id: str | None = None
+    latest_address: str | None = None
+    latest_display_name: str | None = None
+    event_source: str | None = None
+    trigger_buffer: str | None = None
+    trigger_log_line: str | None = None
+
+
 class SyncResponse(BaseModel):
     ok: bool = True
     fetched_count: int = 0
@@ -125,6 +138,11 @@ class MonitorStatusResponse(BaseModel):
     last_event_at: str | None = None
     last_error: str | None = None
     last_log_line: str | None = None
+    active_log_buffers: list[str] = Field(default_factory=list)
+    last_sms_log_hit_at: str | None = None
+    last_sms_log_hit_line: str | None = None
+    last_sms_log_hit_buffer: str | None = None
+    last_broadcast_source: str | None = None
 
 
 class HealthResponse(BaseModel):

@@ -240,6 +240,28 @@
             font-size: 0.95rem;
         }
 
+        .toast {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            z-index: 1150;
+            background: rgba(15, 118, 110, 0.96);
+            color: white;
+            padding: 14px 18px;
+            border-radius: 18px;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+            font-size: 0.95rem;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition: opacity 0.22s ease, transform 0.22s ease;
+        }
+
+        .toast.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
         .switch-btn {
             padding: 8px 12px;
             font-size: 0.86rem;
@@ -446,9 +468,15 @@
                         <label>已连接设备</label>
                         <strong id="device-count">0</strong>
                     </div>
+                    <div class="stat">
+                        <label>最近短信日志命中</label>
+                        <strong id="monitor-last-hit-at" style="font-size: 1rem;">-</strong>
+                        <span id="monitor-last-hit-source">Buffer: -</span>
+                    </div>
                 </div>
                 <div id="health-pill" class="pill">加载中</div>
                 <p class="meta" id="health-detail"></p>
+                <p class="meta" id="monitor-log-hit-summary">最近命中的短信日志摘要：-</p>
             </article>
 
             <article class="card span-7">
@@ -546,6 +574,8 @@
         </div>
     </div>
 
+    <div id="sms-toast" class="toast"></div>
+
     <script>
         const noticeEl = document.getElementById("notice");
         const syncEsimBtn = document.getElementById("sync-esim-btn");
@@ -564,6 +594,7 @@
         const authPasswordInput = document.getElementById("auth-password");
         const authLoginBtn = document.getElementById("auth-login-btn");
         const authError = document.getElementById("auth-error");
+        const smsToast = document.getElementById("sms-toast");
         const smsState = {
             page: 1,
             pageSize: 50,
@@ -574,6 +605,13 @@
             eventSource: null,
             active: false,
             task: null,
+        };
+        const smsEventState = {
+            eventSource: null,
+            toastTimer: null,
+            reconnectTimer: null,
+            reconnectDelayMs: 2000,
+            lastHandledEventKey: null,
         };
         const authState = {
             authenticated: false,
@@ -610,6 +648,18 @@
         function handleUnauthorized() {
             showAuthOverlay("登录状态失效，请重新输入密码。");
             setInteractiveDisabled(false);
+            disconnectSmsEventStream();
+        }
+
+        function showSmsToast(message) {
+            smsToast.textContent = message;
+            smsToast.classList.add("active");
+            if (smsEventState.toastTimer) {
+                clearTimeout(smsEventState.toastTimer);
+            }
+            smsEventState.toastTimer = setTimeout(() => {
+                smsToast.classList.remove("active");
+            }, 3500);
         }
 
         function setNotice(message, isError = false) {
@@ -638,7 +688,13 @@
             if (status.last_event_at) {
                 parts.push(`最近事件 ${status.last_event_at}`);
             }
+            if (status.last_broadcast_source) {
+                parts.push(`最近广播 ${status.last_broadcast_source === "poll" ? "轮询检测" : "实时监听"}`);
+            }
             pill.textContent = parts.join(" · ");
+            document.getElementById("monitor-last-hit-at").textContent = status.last_sms_log_hit_at || "-";
+            document.getElementById("monitor-last-hit-source").textContent = `Buffer: ${status.last_sms_log_hit_buffer || status.active_log_buffers?.join(", ") || "-"}`;
+            document.getElementById("monitor-log-hit-summary").textContent = `最近命中的短信日志摘要：${status.last_sms_log_hit_line || "-"}`;
         }
 
         function renderEsim(data) {
@@ -850,6 +906,71 @@
             }
         }
 
+        function disconnectSmsEventStream() {
+            if (smsEventState.reconnectTimer) {
+                clearTimeout(smsEventState.reconnectTimer);
+                smsEventState.reconnectTimer = null;
+            }
+            if (smsEventState.eventSource) {
+                smsEventState.eventSource.close();
+                smsEventState.eventSource = null;
+            }
+        }
+
+        function buildSmsEventKey(payload) {
+            return [
+                payload.event_type || "new_sms",
+                payload.occurred_at || "",
+                payload.latest_sms_id || "",
+                payload.inserted_count || 0,
+                payload.event_source || "",
+            ].join("|");
+        }
+
+        function shouldHandleSmsSnapshot(payload) {
+            if (payload.event_type !== "new_sms" || !payload.occurred_at) {
+                return false;
+            }
+            const occurredAt = Date.parse(payload.occurred_at);
+            if (Number.isNaN(occurredAt)) {
+                return false;
+            }
+            return Date.now() - occurredAt <= 120000;
+        }
+
+        async function handleSmsEventPayload(payload, fromSnapshot = false) {
+            if (!payload || payload.event_type !== "new_sms") {
+                return;
+            }
+            if (fromSnapshot && !shouldHandleSmsSnapshot(payload)) {
+                return;
+            }
+            const eventKey = buildSmsEventKey(payload);
+            if (smsEventState.lastHandledEventKey === eventKey) {
+                return;
+            }
+            smsEventState.lastHandledEventKey = eventKey;
+            const count = payload.inserted_count || 0;
+            const sender = payload.latest_address || payload.latest_display_name || "新短信";
+            const sourceLabel = payload.event_source === "poll" ? "轮询检测" : "实时监听";
+            showSmsToast(`${sourceLabel}：收到 ${count} 条新短信，来自 ${sender}，已自动刷新`);
+            try {
+                await loadDashboard();
+            } catch (error) {
+                setNotice(error.message, true);
+            }
+        }
+
+        function scheduleSmsEventReconnect() {
+            if (!authState.authenticated || smsEventState.reconnectTimer || smsEventState.eventSource) {
+                return;
+            }
+            smsEventState.reconnectTimer = setTimeout(() => {
+                smsEventState.reconnectTimer = null;
+                ensureSmsEventStream();
+            }, smsEventState.reconnectDelayMs);
+        }
+
         function ensureSwitchEventStream() {
             if (switchState.eventSource || !authState.authenticated) {
                 return;
@@ -860,7 +981,7 @@
             };
             source.addEventListener("snapshot", (event) => {
                 const task = JSON.parse(event.data);
-                if (task.status !== "idle") {
+                if (task.status === "running") {
                     openSwitchOverlay();
                     renderSwitchTask(task);
                 }
@@ -880,6 +1001,30 @@
                 renderSwitchTask(JSON.parse(event.data));
             });
             switchState.eventSource = source;
+        }
+
+        function ensureSmsEventStream() {
+            if (smsEventState.eventSource || !authState.authenticated) {
+                return;
+            }
+            const source = new EventSource("/api/sms/stream");
+            source.onopen = () => {
+                if (smsEventState.reconnectTimer) {
+                    clearTimeout(smsEventState.reconnectTimer);
+                    smsEventState.reconnectTimer = null;
+                }
+            };
+            source.onerror = () => {
+                disconnectSmsEventStream();
+                scheduleSmsEventReconnect();
+            };
+            source.addEventListener("snapshot", async (event) => {
+                await handleSmsEventPayload(JSON.parse(event.data), true);
+            };
+            source.addEventListener("new_sms", async (event) => {
+                await handleSmsEventPayload(JSON.parse(event.data));
+            });
+            smsEventState.eventSource = source;
         }
 
         async function startEsimSwitch(displayName) {
@@ -977,6 +1122,7 @@
                 if (result.authenticated) {
                     hideAuthOverlay();
                     ensureSwitchEventStream();
+                    ensureSmsEventStream();
                     await loadDashboard();
                 }
             } catch (error) {
@@ -1001,6 +1147,7 @@
                 }
                 hideAuthOverlay();
                 ensureSwitchEventStream();
+                ensureSmsEventStream();
                 await loadDashboard();
             } catch (_) {
                 showAuthOverlay();

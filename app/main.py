@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 from contextlib import asynccontextmanager
@@ -21,15 +22,22 @@ from app.models import (
     EsimSwitchStatusResponse,
     HealthResponse,
     MonitorStatusResponse,
+    SmsEventStatusResponse,
     SmsListResponse,
     SyncResponse,
 )
 from app.monitor import SmsMonitor
+from app.sms_event_service import SmsEventService
 from app.services import AppServices, EsimSyncService, SmsSyncService, utc_now_iso
 from app.switch_service import EsimSwitchConflictError, EsimSwitchService
 
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
 
 
 def build_services(config: AppConfig) -> AppServices:
@@ -37,7 +45,8 @@ def build_services(config: AppConfig) -> AppServices:
     adb_client = AdbClient(config)
     esim_service = EsimSyncService(db, adb_client)
     sms_service = SmsSyncService(db, adb_client)
-    monitor = SmsMonitor(config, db, sms_service, adb_client)
+    sms_event_service = SmsEventService()
+    monitor = SmsMonitor(config, db, sms_service, adb_client, sms_event_service=sms_event_service)
     switch_service = EsimSwitchService(config, esim_service)
     return AppServices(
         config=config,
@@ -47,6 +56,7 @@ def build_services(config: AppConfig) -> AppServices:
         sms_service=sms_service,
         monitor=monitor,
         switch_service=switch_service,
+        sms_event_service=sms_event_service,
     )
 
 
@@ -181,13 +191,16 @@ def create_app(
                 while True:
                     if await request.is_disconnected():
                         break
-                    message = await queue.get()
-                    yield f"event: {message['event']}\n"
-                    yield f"data: {json.dumps(message['data'], ensure_ascii=False)}\n\n"
+                    try:
+                        message = await asyncio.wait_for(queue.get(), timeout=15)
+                        yield f"event: {message['event']}\n"
+                        yield f"data: {json.dumps(message['data'], ensure_ascii=False)}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": ping\n\n"
             finally:
                 runtime.switch_service.unsubscribe(queue)
 
-        return StreamingResponse(event_generator(), media_type="text/event-stream")
+        return StreamingResponse(event_generator(), media_type="text/event-stream", headers=SSE_HEADERS)
 
     @app.post("/api/esim/sync", response_model=SyncResponse)
     async def sync_esim(request: Request) -> dict:
@@ -251,6 +264,28 @@ def create_app(
                 utc_now_iso(),
             )
             raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.get("/api/sms/stream")
+    async def sms_stream(request: Request) -> StreamingResponse:
+        require_auth(request)
+        runtime = get_services(request)
+
+        async def event_generator():
+            queue = await runtime.sms_event_service.subscribe()
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        message = await asyncio.wait_for(queue.get(), timeout=15)
+                        yield f"event: {message['event']}\n"
+                        yield f"data: {json.dumps(message['data'], ensure_ascii=False)}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": ping\n\n"
+            finally:
+                runtime.sms_event_service.unsubscribe(queue)
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream", headers=SSE_HEADERS)
 
     @app.get("/api/monitor/status", response_model=MonitorStatusResponse)
     async def monitor_status(request: Request) -> dict:

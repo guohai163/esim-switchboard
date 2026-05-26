@@ -136,8 +136,13 @@ class AdbClient:
             f"ADB content query failed after multiple attempts. Last output: {last_error_text or 'unknown error'}",
         )
 
-    def stream_logcat(self) -> subprocess.Popen[str]:
-        command = [*self._base_command(), "logcat", "-s", *self.config.sms_log_tags]
+    def stream_logcat(self, buffers: tuple[str, ...] | None = None, tags: tuple[str, ...] | None = None) -> subprocess.Popen[str]:
+        resolved_buffers = buffers or self.config.sms_log_buffers
+        resolved_tags = tags or self.config.sms_log_tags
+        command = [*self._base_command(), "logcat"]
+        for buffer_name in resolved_buffers:
+            command.extend(["-b", buffer_name])
+        command.extend(["-s", *resolved_tags])
         try:
             return subprocess.Popen(
                 command,
