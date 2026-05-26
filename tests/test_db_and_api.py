@@ -3,10 +3,11 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.adb import AdbClient
+from app.adb import AdbClient, AdbCommandError
 from app.config import AppConfig
 from app.db import Database
 from app.main import build_services, create_app
+from app.services import AppServices
 from app.models import SmsMessageRecord
 from app.switch_service import EsimSwitchConflictError
 
@@ -26,7 +27,7 @@ class FakeAdbClient:
 Row: 1 address=10086, body=world, sub_id=5, _id=2, date=1716670000000
 """
 
-    def get_devices(self) -> list[str]:
+    def get_devices(self, timeout: float = 30) -> list[str]:  # noqa: ARG002
         return ["device-001"]
 
     def read_isub(self) -> str:
@@ -159,6 +160,11 @@ Row: 1 address=10086, body=world, sub_id=5, _id=2, date=1716670000000
         return self._client.query_sms_inbox(limit=limit)
 
 
+class FailingDevicesAdbClient(FakeAdbClient):
+    def get_devices(self, timeout: float = 30) -> list[str]:  # noqa: ARG002
+        raise AdbCommandError(["adb", "devices"], "ADB command timed out after 3s")
+
+
 def make_test_app(tmp_path: Path) -> TestClient:
     config = AppConfig.from_env(tmp_path)
     config.adb_path = "/tmp/fake-adb"
@@ -179,6 +185,17 @@ def make_test_app(tmp_path: Path) -> TestClient:
     services.sms_service.sync_all_inbox()
     app = create_app(config=config, services=services, auto_startup=False)
     return TestClient(app)
+
+
+def make_test_services(tmp_path: Path) -> tuple[AppConfig, AppServices]:
+    config = AppConfig.from_env(tmp_path)
+    config.adb_path = "/tmp/fake-adb"
+    config.app_password = "secret123"
+    config.app_auth_cookie_name = "esim_switch_auth"
+    config.app_auth_cookie_value = "signed-secret-cookie"
+    services = build_services(config)
+    services.db.init_schema()
+    return config, services
 
 
 def test_database_upsert_sms_deduplicates(tmp_path: Path) -> None:
@@ -274,6 +291,50 @@ def test_auth_protects_business_apis(tmp_path: Path) -> None:
     assert logout.status_code == 200
     assert auth_status_final.json()["authenticated"] is False
     assert unauthorized_again.status_code == 401
+
+
+def test_index_and_favicon_are_publicly_accessible(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+
+    index = client.get("/")
+    favicon = client.get("/assets/favicon.ico")
+
+    assert index.status_code == 200
+    assert '/assets/favicon.ico' in index.text
+    assert favicon.status_code == 200
+    assert favicon.headers["content-type"] in {"image/x-icon", "image/vnd.microsoft.icon"}
+
+
+def test_health_degrades_when_adb_device_probe_fails(tmp_path: Path) -> None:
+    config, services = make_test_services(tmp_path)
+    services.adb_client = FailingDevicesAdbClient()
+    services.esim_service.adb_client = services.adb_client
+    services.sms_service.adb_client = services.adb_client
+    services.monitor.adb_client = services.adb_client
+    services.monitor.sms_service = services.sms_service
+    services.switch_service = FakeSwitchService()
+    services.sms_event_service = FakeSmsEventService()
+    services.monitor.sms_event_service = services.sms_event_service
+    services.esim_service.sync()
+    services.sms_service.sync_all_inbox()
+    client = TestClient(create_app(config=config, services=services, auto_startup=False))
+
+    login = client.post("/api/auth/login", json={"password": "secret123"})
+    assert login.status_code == 200
+
+    health = client.get("/api/health")
+    latest_esim = client.get("/api/esim/latest")
+    sms = client.get("/api/sms?page=1&page_size=10")
+
+    assert health.status_code == 200
+    assert health.json()["ok"] is False
+    assert health.json()["adb_available"] is False
+    assert "timed out" in health.json()["adb_error"]
+    assert health.json()["monitor"]["running"] is False
+    assert latest_esim.status_code == 200
+    assert latest_esim.json()["embedded_total_count"] == 2
+    assert sms.status_code == 200
+    assert sms.json()["total"] == 2
 
 
 def test_sms_stream_requires_auth_and_allows_authenticated_stream(tmp_path: Path) -> None:

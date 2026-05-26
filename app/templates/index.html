@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
+    <link rel="icon" href="/assets/favicon.ico" sizes="any">
     <style>
         :root {
             color-scheme: light;
@@ -677,6 +678,16 @@
             document.getElementById("health-detail").textContent = health.adb_error || `ADB 路径: ${health.adb_path}`;
         }
 
+        function renderHealthError(message) {
+            document.getElementById("adb-available").textContent = "-";
+            document.getElementById("monitor-running").textContent = "-";
+            document.getElementById("device-count").textContent = "-";
+            const healthPill = document.getElementById("health-pill");
+            healthPill.className = "pill bad";
+            healthPill.textContent = "服务状态读取失败";
+            document.getElementById("health-detail").textContent = message;
+        }
+
         function renderMonitor(status) {
             const pill = document.getElementById("monitor-pill");
             pill.className = status.connected ? "pill" : "pill bad";
@@ -695,6 +706,15 @@
             document.getElementById("monitor-last-hit-at").textContent = status.last_sms_log_hit_at || "-";
             document.getElementById("monitor-last-hit-source").textContent = `Buffer: ${status.last_sms_log_hit_buffer || status.active_log_buffers?.join(", ") || "-"}`;
             document.getElementById("monitor-log-hit-summary").textContent = `最近命中的短信日志摘要：${status.last_sms_log_hit_line || "-"}`;
+        }
+
+        function renderMonitorError(message) {
+            const pill = document.getElementById("monitor-pill");
+            pill.className = "pill bad";
+            pill.textContent = "监听状态读取失败";
+            document.getElementById("monitor-last-hit-at").textContent = "-";
+            document.getElementById("monitor-last-hit-source").textContent = "Buffer: -";
+            document.getElementById("monitor-log-hit-summary").textContent = `最近命中的短信日志摘要：${message}`;
         }
 
         function renderEsim(data) {
@@ -748,6 +768,15 @@
             });
         }
 
+        function renderEsimError(message) {
+            document.getElementById("esim-total").textContent = "-";
+            document.getElementById("esim-active").textContent = "-";
+            document.getElementById("esim-sync-at").textContent = "-";
+            displayNameFilter.innerHTML = '<option value="">全部名称</option>';
+            const tbody = document.getElementById("esim-table-body");
+            tbody.innerHTML = `<tr><td colspan="5" class="meta">${message}</td></tr>`;
+        }
+
         function renderSms(data) {
             smsState.page = data.page;
             smsState.pageSize = data.page_size;
@@ -776,6 +805,15 @@
             }
         }
 
+        function renderSmsError(message) {
+            pageIndicator.textContent = `第 ${smsState.page} 页`;
+            prevPageBtn.disabled = true;
+            nextPageBtn.disabled = true;
+            document.getElementById("sms-summary").textContent = "短信列表读取失败";
+            const tbody = document.getElementById("sms-table-body");
+            tbody.innerHTML = `<tr><td colspan="5" class="meta">${message}</td></tr>`;
+        }
+
         function formatLocalDateTime(timestamp) {
             if (timestamp === null || timestamp === undefined || Number.isNaN(Number(timestamp))) {
                 return "-";
@@ -801,25 +839,68 @@
             return sms;
         }
 
-        async function loadDashboard() {
+        async function loadHealthSection() {
             try {
-                const [health, esim, monitor] = await Promise.all([
-                    fetchJson("/api/health"),
-                    fetchJson("/api/esim/latest"),
-                    fetchJson("/api/monitor/status"),
-                ]);
-                const sms = await loadSmsPage(smsState.page);
+                const health = await fetchJson("/api/health");
                 renderHealth(health);
-                renderEsim(esim);
-                renderMonitor(monitor);
-                const lastSync = health.last_sms_sync;
-                if (lastSync && lastSync.synced_at) {
-                    setNotice(`数据已刷新。最近短信同步：${lastSync.detail || "unknown"}，拉取 ${lastSync.fetched_count ?? 0}，新增 ${lastSync.inserted_count ?? 0}。`);
-                } else {
-                    setNotice("数据已刷新");
-                }
+                return { ok: true, data: health };
             } catch (error) {
-                setNotice(error.message, true);
+                renderHealthError(error.message);
+                return { ok: false, error: `服务状态读取失败：${error.message}` };
+            }
+        }
+
+        async function loadEsimSection() {
+            try {
+                const esim = await fetchJson("/api/esim/latest");
+                renderEsim(esim);
+                return { ok: true, data: esim };
+            } catch (error) {
+                renderEsimError(`eSIM 状态读取失败：${error.message}`);
+                return { ok: false, error: `eSIM 状态读取失败：${error.message}` };
+            }
+        }
+
+        async function loadMonitorSection() {
+            try {
+                const monitor = await fetchJson("/api/monitor/status");
+                renderMonitor(monitor);
+                return { ok: true, data: monitor };
+            } catch (error) {
+                renderMonitorError(error.message);
+                return { ok: false, error: `监听状态读取失败：${error.message}` };
+            }
+        }
+
+        async function loadSmsSection(page = smsState.page) {
+            try {
+                const sms = await loadSmsPage(page);
+                return { ok: true, data: sms };
+            } catch (error) {
+                renderSmsError(`短信列表读取失败：${error.message}`);
+                return { ok: false, error: `短信列表读取失败：${error.message}` };
+            }
+        }
+
+        async function loadDashboard() {
+            const [healthResult, esimResult, monitorResult, smsResult] = await Promise.all([
+                loadHealthSection(),
+                loadEsimSection(),
+                loadMonitorSection(),
+                loadSmsSection(smsState.page),
+            ]);
+            const failures = [healthResult, esimResult, monitorResult, smsResult]
+                .filter((result) => !result.ok)
+                .map((result) => result.error);
+            if (failures.length) {
+                setNotice(`部分数据加载失败：${failures.join("；")}`, true);
+                return;
+            }
+            const lastSync = healthResult.data.last_sms_sync;
+            if (lastSync && lastSync.synced_at) {
+                setNotice(`数据已刷新。最近短信同步：${lastSync.detail || "unknown"}，拉取 ${lastSync.fetched_count ?? 0}，新增 ${lastSync.inserted_count ?? 0}。`);
+            } else {
+                setNotice("数据已刷新");
             }
         }
 
@@ -955,7 +1036,10 @@
             const sourceLabel = payload.event_source === "poll" ? "轮询检测" : "实时监听";
             showSmsToast(`${sourceLabel}：收到 ${count} 条新短信，来自 ${sender}，已自动刷新`);
             try {
-                await loadDashboard();
+                const result = await loadSmsSection(smsState.page);
+                if (!result.ok) {
+                    setNotice(result.error, true);
+                }
             } catch (error) {
                 setNotice(error.message, true);
             }
@@ -1020,7 +1104,7 @@
             };
             source.addEventListener("snapshot", async (event) => {
                 await handleSmsEventPayload(JSON.parse(event.data), true);
-            };
+            });
             source.addEventListener("new_sms", async (event) => {
                 await handleSmsEventPayload(JSON.parse(event.data));
             });
@@ -1070,7 +1154,10 @@
             smsState.displayName = event.target.value;
             smsState.page = 1;
             try {
-                await loadDashboard();
+                const result = await loadSmsSection(smsState.page);
+                if (!result.ok) {
+                    setNotice(result.error, true);
+                }
             } catch (error) {
                 setNotice(error.message, true);
             }
@@ -1081,7 +1168,10 @@
             }
             smsState.page -= 1;
             try {
-                await loadDashboard();
+                const result = await loadSmsSection(smsState.page);
+                if (!result.ok) {
+                    setNotice(result.error, true);
+                }
             } catch (error) {
                 setNotice(error.message, true);
             }
@@ -1093,7 +1183,10 @@
             }
             smsState.page += 1;
             try {
-                await loadDashboard();
+                const result = await loadSmsSection(smsState.page);
+                if (!result.ok) {
+                    setNotice(result.error, true);
+                }
             } catch (error) {
                 setNotice(error.message, true);
             }

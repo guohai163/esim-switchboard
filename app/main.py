@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -33,6 +34,7 @@ from app.switch_service import EsimSwitchConflictError, EsimSwitchService
 
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 SSE_HEADERS = {
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
@@ -58,6 +60,10 @@ def build_services(config: AppConfig) -> AppServices:
         switch_service=switch_service,
         sms_event_service=sms_event_service,
     )
+
+
+async def run_blocking(func, *args, **kwargs):
+    return await run_in_threadpool(func, *args, **kwargs)
 
 
 def create_app(
@@ -87,6 +93,8 @@ def create_app(
     app.state.services = resolved_services
     app.state.config = resolved_config
     resolved_config.switch_screenshot_dir.mkdir(parents=True, exist_ok=True)
+    if ASSETS_DIR.exists():
+        app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
     app.mount("/switch-screenshots", StaticFiles(directory=str(resolved_config.switch_screenshot_dir)), name="switch-screenshots")
 
     def is_authenticated(request: Request) -> bool:
@@ -139,7 +147,10 @@ def create_app(
         adb_devices: list[str] = []
         adb_error: str | None = None
         try:
-            adb_devices = runtime.adb_client.get_devices()
+            adb_devices = await run_blocking(
+                runtime.adb_client.get_devices,
+                timeout=runtime.config.adb_healthcheck_timeout_seconds,
+            )
             adb_available = len(adb_devices) > 0
             if not adb_devices:
                 adb_error = "No connected adb devices detected"
@@ -152,23 +163,23 @@ def create_app(
             "adb_available": adb_available,
             "adb_devices": adb_devices,
             "adb_error": adb_error,
-            "monitor": runtime.monitor.get_status(),
-            "last_sms_sync": runtime.db.get_app_state_json("last_sms_sync"),
-            "last_esim_sync": runtime.db.get_app_state_json("last_esim_sync"),
+            "monitor": await run_blocking(runtime.monitor.get_status),
+            "last_sms_sync": await run_blocking(runtime.db.get_app_state_json, "last_sms_sync"),
+            "last_esim_sync": await run_blocking(runtime.db.get_app_state_json, "last_esim_sync"),
         }
 
     @app.get("/api/esim/latest", response_model=EsimLatestResponse)
     async def get_latest_esim(request: Request) -> dict:
         require_auth(request)
         runtime = get_services(request)
-        return runtime.esim_service.latest()
+        return await run_blocking(runtime.esim_service.latest)
 
     @app.post("/api/esim/switch", response_model=EsimSwitchStatusResponse)
     async def switch_esim(request: Request, payload: EsimSwitchRequest) -> dict:
         require_auth(request)
         runtime = get_services(request)
         try:
-            return runtime.switch_service.start_switch(payload.display_name)
+            return await run_blocking(runtime.switch_service.start_switch, payload.display_name)
         except EsimSwitchConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:  # noqa: BLE001
@@ -178,7 +189,7 @@ def create_app(
     async def esim_switch_status(request: Request) -> dict:
         require_auth(request)
         runtime = get_services(request)
-        return runtime.switch_service.get_status()
+        return await run_blocking(runtime.switch_service.get_status)
 
     @app.get("/api/esim/switch/stream")
     async def esim_switch_stream(request: Request) -> StreamingResponse:
@@ -207,9 +218,10 @@ def create_app(
         require_auth(request)
         runtime = get_services(request)
         try:
-            return runtime.esim_service.sync()
+            return await run_blocking(runtime.esim_service.sync)
         except Exception as exc:  # noqa: BLE001
-            runtime.db.set_app_state(
+            await run_blocking(
+                runtime.db.set_app_state,
                 "last_esim_sync",
                 {"ok": False, "detail": str(exc), "synced_at": utc_now_iso()},
                 utc_now_iso(),
@@ -228,7 +240,8 @@ def create_app(
     ) -> dict:
         require_auth(request)
         runtime = get_services(request)
-        return runtime.sms_service.list_messages(
+        return await run_blocking(
+            runtime.sms_service.list_messages,
             page=page,
             page_size=page_size,
             address=address,
@@ -242,9 +255,10 @@ def create_app(
         require_auth(request)
         runtime = get_services(request)
         try:
-            return runtime.sms_service.sync_all_inbox()
+            return await run_blocking(runtime.sms_service.sync_all_inbox)
         except Exception as exc:  # noqa: BLE001
-            runtime.db.set_app_state(
+            await run_blocking(
+                runtime.db.set_app_state,
                 "last_sms_sync",
                 {"ok": False, "detail": str(exc), "synced_at": utc_now_iso()},
                 utc_now_iso(),
@@ -256,9 +270,10 @@ def create_app(
         require_auth(request)
         runtime = get_services(request)
         try:
-            return runtime.sms_service.sync_all_inbox()
+            return await run_blocking(runtime.sms_service.sync_all_inbox)
         except Exception as exc:  # noqa: BLE001
-            runtime.db.set_app_state(
+            await run_blocking(
+                runtime.db.set_app_state,
                 "last_sms_sync",
                 {"ok": False, "detail": str(exc), "synced_at": utc_now_iso()},
                 utc_now_iso(),
@@ -291,7 +306,7 @@ def create_app(
     async def monitor_status(request: Request) -> dict:
         require_auth(request)
         runtime = get_services(request)
-        return runtime.monitor.get_status()
+        return await run_blocking(runtime.monitor.get_status)
 
     return app
 

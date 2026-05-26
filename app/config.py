@@ -14,6 +14,7 @@ class AppConfig:
     db_path: Path
     adb_path: str
     adb_device_serial: str | None
+    adb_healthcheck_timeout_seconds: float
     sms_sync_delay_seconds: float
     adb_reconnect_delay_seconds: float
     default_page_size: int
@@ -44,6 +45,7 @@ class AppConfig:
             db_path=Path(os.getenv("DB_PATH", resolved_base_dir / "db.sqlite")),
             adb_path=os.getenv("ADB_PATH", "adb"),
             adb_device_serial=os.getenv("ADB_DEVICE_SERIAL") or None,
+            adb_healthcheck_timeout_seconds=float(os.getenv("ADB_HEALTHCHECK_TIMEOUT_SECONDS", "3")),
             sms_sync_delay_seconds=float(os.getenv("SMS_SYNC_DELAY_SECONDS", "1.5")),
             adb_reconnect_delay_seconds=float(os.getenv("ADB_RECONNECT_DELAY_SECONDS", "5")),
             default_page_size=int(os.getenv("DEFAULT_PAGE_SIZE", "50")),

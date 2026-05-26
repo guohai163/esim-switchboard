@@ -50,8 +50,8 @@ class AdbClient:
             raise AdbCommandError(command, error_text or "ADB command failed", stderr=result.stderr)
         return result.stdout
 
-    def get_devices(self) -> list[str]:
-        output = self.run(["devices"])
+    def get_devices(self, timeout: float = 30) -> list[str]:
+        output = self.run(["devices"], timeout=timeout)
         devices: list[str] = []
         for line in output.splitlines():
             if "\tdevice" in line:
