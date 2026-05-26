@@ -1,0 +1,47 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="52" x2="444" y2="464" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0F766E"/>
+      <stop offset="1" stop-color="#155E75"/>
+    </linearGradient>
+    <linearGradient id="card" x1="116" y1="118" x2="332" y2="332" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#DDEAF0"/>
+    </linearGradient>
+    <linearGradient id="bubble" x1="270" y1="248" x2="430" y2="404" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <filter id="shadow" x="48" y="40" width="416" height="432" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0F172A" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="96" y="104" width="250" height="304" rx="40" fill="url(#card)"/>
+    <path d="M290 104H346V166H290C278.954 166 270 157.046 270 146V124C270 112.954 278.954 104 290 104Z" fill="#B9D6DF"/>
+    <rect x="136" y="162" width="170" height="26" rx="13" fill="#0F766E" opacity="0.14"/>
+    <rect x="136" y="214" width="138" height="18" rx="9" fill="#0F766E" opacity="0.18"/>
+    <rect x="136" y="246" width="112" height="18" rx="9" fill="#0F766E" opacity="0.12"/>
+    <rect x="136" y="292" width="168" height="82" rx="24" fill="#0F766E" opacity="0.10"/>
+    <circle cx="178" cy="333" r="20" fill="#0F766E" opacity="0.72"/>
+    <path d="M178 320C184.627 320 190 325.373 190 332C190 334.589 189.18 336.986 187.785 338.945C185.578 342.066 181.938 344 177.846 344C171.305 344 166 338.695 166 332.154C166 325.613 171.305 320.308 177.846 320.308L178 320Z" fill="#F8FAFC"/>
+    <rect x="208" y="318" width="74" height="12" rx="6" fill="#0F766E" opacity="0.36"/>
+    <rect x="208" y="340" width="54" height="10" rx="5" fill="#0F766E" opacity="0.24"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M286 236C286 213.909 303.909 196 326 196H382C417.346 196 446 224.654 446 260V314C446 349.346 417.346 378 382 378H348L312 410V378H326C303.909 378 286 360.091 286 338V236Z" fill="url(#bubble)"/>
+    <rect x="320" y="248" width="90" height="18" rx="9" fill="#7C4A03" opacity="0.24"/>
+    <rect x="320" y="280" width="64" height="18" rx="9" fill="#7C4A03" opacity="0.18"/>
+    <rect x="320" y="316" width="80" height="14" rx="7" fill="#7C4A03" opacity="0.14"/>
+  </g>
+
+  <g>
+    <rect x="248" y="120" width="146" height="58" rx="29" fill="#E2E8F0" opacity="0.92"/>
+    <circle cx="364" cy="149" r="23" fill="#0F766E"/>
+    <path d="M267 149C267 138.507 275.507 130 286 130H321C331.493 130 340 138.507 340 149C340 159.493 331.493 168 321 168H286C275.507 168 267 159.493 267 149Z" fill="#94A3B8"/>
+  </g>
+</svg>

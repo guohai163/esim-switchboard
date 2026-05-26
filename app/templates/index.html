@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f6f0e5;
+            --panel: rgba(255, 255, 255, 0.82);
+            --panel-strong: #fffdf9;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --accent: #0f766e;
+            --accent-soft: #d9f4ef;
+            --danger: #b91c1c;
+            --border: rgba(15, 118, 110, 0.18);
+            --shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "PingFang SC", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 28%),
+                radial-gradient(circle at top right, rgba(245, 158, 11, 0.16), transparent 24%),
+                linear-gradient(160deg, #f6f0e5 0%, #edf7f5 100%);
+        }
+
+        .page {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 32px 20px 48px;
+        }
+
+        .hero {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3.4rem);
+            line-height: 1;
+            letter-spacing: -0.04em;
+        }
+
+        .hero p {
+            margin: 8px 0 0;
+            color: var(--muted);
+            max-width: 680px;
+            font-size: 1rem;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            appearance: none;
+            border: 0;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #115e59, #0f766e);
+            color: white;
+            padding: 12px 18px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: transform 0.18s ease, opacity 0.18s ease;
+        }
+
+        button.secondary {
+            background: white;
+            color: var(--accent);
+            border: 1px solid rgba(15, 118, 110, 0.22);
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: progress;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 18px;
+        }
+
+        .card {
+            grid-column: span 12;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            padding: 22px;
+            backdrop-filter: blur(18px);
+        }
+
+        .card h2 {
+            margin: 0 0 16px;
+            font-size: 1.1rem;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .stat {
+            background: var(--panel-strong);
+            border-radius: 18px;
+            padding: 16px;
+            border: 1px solid rgba(15, 118, 110, 0.12);
+        }
+
+        .stat label {
+            display: block;
+            color: var(--muted);
+            font-size: 0.86rem;
+            margin-bottom: 10px;
+        }
+
+        .stat strong {
+            font-size: 1.8rem;
+            line-height: 1;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-size: 0.9rem;
+        }
+
+        .pill.bad {
+            background: rgba(185, 28, 28, 0.1);
+            color: var(--danger);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 10px;
+            text-align: left;
+            vertical-align: top;
+            border-top: 1px solid rgba(15, 118, 110, 0.09);
+            font-size: 0.94rem;
+        }
+
+        thead th {
+            color: var(--muted);
+            border-top: 0;
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .sms-body {
+            white-space: pre-wrap;
+            max-width: 420px;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .toolbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-actions select {
+            appearance: none;
+            border: 1px solid rgba(15, 118, 110, 0.22);
+            border-radius: 999px;
+            background: white;
+            color: var(--text);
+            padding: 10px 14px;
+            font-size: 0.92rem;
+            min-width: 180px;
+        }
+
+        .pager {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pager button {
+            padding: 9px 14px;
+            font-size: 0.88rem;
+        }
+
+        .pager span {
+            font-size: 0.92rem;
+            color: var(--muted);
+        }
+
+        .notice {
+            margin-top: 16px;
+            min-height: 24px;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .switch-btn {
+            padding: 8px 12px;
+            font-size: 0.86rem;
+        }
+
+        .switch-btn[disabled] {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.46);
+            backdrop-filter: blur(3px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .overlay.active {
+            display: flex;
+        }
+
+        .auth-overlay {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 24%),
+                radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.16), transparent 24%),
+                rgba(246, 240, 229, 0.96);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1200;
+            padding: 20px;
+        }
+
+        .auth-overlay.active {
+            display: flex;
+        }
+
+        .auth-card {
+            width: min(420px, 100%);
+            background: rgba(255, 253, 249, 0.98);
+            border-radius: 28px;
+            border: 1px solid rgba(15, 118, 110, 0.16);
+            box-shadow: 0 30px 80px rgba(15, 23, 42, 0.14);
+            padding: 28px;
+        }
+
+        .auth-card h2 {
+            margin: 0 0 10px;
+            font-size: 1.5rem;
+        }
+
+        .auth-card p {
+            margin: 0 0 18px;
+            color: var(--muted);
+        }
+
+        .auth-card input {
+            width: 100%;
+            border: 1px solid rgba(15, 118, 110, 0.22);
+            border-radius: 18px;
+            padding: 14px 16px;
+            font-size: 1rem;
+            margin-bottom: 14px;
+            background: white;
+        }
+
+        .auth-error {
+            min-height: 22px;
+            color: var(--danger);
+            font-size: 0.92rem;
+            margin-top: 12px;
+        }
+
+        .overlay-card {
+            width: min(920px, 100%);
+            max-height: 88vh;
+            overflow: auto;
+            background: rgba(255, 253, 249, 0.97);
+            border-radius: 28px;
+            box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
+            padding: 24px;
+            border: 1px solid rgba(15, 118, 110, 0.16);
+        }
+
+        .overlay-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .overlay-title {
+            margin: 0;
+            font-size: 1.4rem;
+        }
+
+        .overlay-subtitle {
+            margin: 8px 0 0;
+            color: var(--muted);
+        }
+
+        .overlay-close {
+            background: white;
+            color: var(--accent);
+            border: 1px solid rgba(15, 118, 110, 0.22);
+        }
+
+        .switch-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 18px;
+        }
+
+        .switch-preview {
+            background: #f3f6f5;
+            border-radius: 20px;
+            border: 1px solid rgba(15, 118, 110, 0.12);
+            padding: 14px;
+            min-height: 280px;
+        }
+
+        .switch-preview img {
+            width: 100%;
+            display: block;
+            border-radius: 16px;
+            background: white;
+        }
+
+        .switch-steps {
+            background: #fffdf9;
+            border-radius: 20px;
+            border: 1px solid rgba(15, 118, 110, 0.12);
+            padding: 14px;
+        }
+
+        .switch-steps ol {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        .switch-steps li {
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .switch-steps small {
+            display: block;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
+        @media (min-width: 900px) {
+            .span-5 {
+                grid-column: span 5;
+            }
+
+            .span-7 {
+                grid-column: span 7;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .switch-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <section class="hero">
+            <div>
+                <h1>Android SMS Dashboard</h1>
+                <p>在本机查看 USB 连接安卓手机的 eSIM 状态、收件箱短信，以及后台监听线程运行情况。</p>
+            </div>
+            <div class="actions">
+                <button id="sync-esim-btn">同步 eSIM</button>
+                <button id="sync-sms-btn" class="secondary">拉取全部历史短信</button>
+            </div>
+        </section>
+
+        <section class="grid">
+            <article class="card span-5">
+                <h2>服务状态</h2>
+                <div class="stats">
+                    <div class="stat">
+                        <label>ADB 可用</label>
+                        <strong id="adb-available">-</strong>
+                    </div>
+                    <div class="stat">
+                        <label>监听线程</label>
+                        <strong id="monitor-running">-</strong>
+                    </div>
+                    <div class="stat">
+                        <label>已连接设备</label>
+                        <strong id="device-count">0</strong>
+                    </div>
+                </div>
+                <div id="health-pill" class="pill">加载中</div>
+                <p class="meta" id="health-detail"></p>
+            </article>
+
+            <article class="card span-7">
+                <h2>eSIM 状态</h2>
+                <div class="stats">
+                    <div class="stat">
+                        <label>总 eSIM 数</label>
+                        <strong id="esim-total">0</strong>
+                    </div>
+                    <div class="stat">
+                        <label>当前激活 eSIM 数</label>
+                        <strong id="esim-active">0</strong>
+                    </div>
+                    <div class="stat">
+                        <label>最近同步</label>
+                        <strong id="esim-sync-at" style="font-size: 1rem;">-</strong>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sub ID</th>
+                            <th>名称</th>
+                            <th>运营商</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="esim-table-body"></tbody>
+                </table>
+            </article>
+
+            <article class="card">
+                <div class="toolbar">
+                    <div>
+                        <h2 style="margin-bottom: 6px;">收件箱短信</h2>
+                        <div class="meta" id="sms-summary">加载中</div>
+                    </div>
+                    <div class="toolbar-actions">
+                        <select id="display-name-filter" aria-label="按名称筛选">
+                            <option value="">全部名称</option>
+                        </select>
+                        <div class="pager">
+                            <button id="prev-page-btn" class="secondary" type="button">上一页</button>
+                            <span id="page-indicator">第 1 页</span>
+                            <button id="next-page-btn" class="secondary" type="button">下一页</button>
+                        </div>
+                        <div class="pill" id="monitor-pill">监听状态读取中</div>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>短信 ID</th>
+                            <th>号码</th>
+                            <th>eSIM 名称</th>
+                            <th>时间戳</th>
+                            <th>内容</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sms-table-body"></tbody>
+                </table>
+                <div class="notice" id="notice"></div>
+            </article>
+        </section>
+    </div>
+
+    <div id="switch-overlay" class="overlay" aria-live="polite" aria-modal="true">
+        <div class="overlay-card">
+            <div class="overlay-top">
+                <div>
+                    <h2 class="overlay-title" id="switch-overlay-title">正在切换 eSIM</h2>
+                    <p class="overlay-subtitle" id="switch-overlay-subtitle">等待任务开始...</p>
+                </div>
+                <button id="switch-overlay-close" class="overlay-close" type="button" disabled>关闭</button>
+            </div>
+            <div class="switch-grid">
+                <div class="switch-preview">
+                    <img id="switch-preview-image" alt="切换步骤截图" />
+                </div>
+                <div class="switch-steps">
+                    <ol id="switch-step-list"></ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="auth-overlay" class="auth-overlay" aria-live="polite" aria-modal="true">
+        <div class="auth-card">
+            <h2>输入访问密码</h2>
+            <p>通过密码验证后，才能查看短信、eSIM 状态以及执行切换操作。</p>
+            <input id="auth-password" type="password" placeholder="请输入密码" autocomplete="current-password" />
+            <button id="auth-login-btn" type="button">登录</button>
+            <div id="auth-error" class="auth-error"></div>
+        </div>
+    </div>
+
+    <script>
+        const noticeEl = document.getElementById("notice");
+        const syncEsimBtn = document.getElementById("sync-esim-btn");
+        const syncSmsBtn = document.getElementById("sync-sms-btn");
+        const prevPageBtn = document.getElementById("prev-page-btn");
+        const nextPageBtn = document.getElementById("next-page-btn");
+        const pageIndicator = document.getElementById("page-indicator");
+        const displayNameFilter = document.getElementById("display-name-filter");
+        const switchOverlay = document.getElementById("switch-overlay");
+        const switchOverlayTitle = document.getElementById("switch-overlay-title");
+        const switchOverlaySubtitle = document.getElementById("switch-overlay-subtitle");
+        const switchOverlayClose = document.getElementById("switch-overlay-close");
+        const switchPreviewImage = document.getElementById("switch-preview-image");
+        const switchStepList = document.getElementById("switch-step-list");
+        const authOverlay = document.getElementById("auth-overlay");
+        const authPasswordInput = document.getElementById("auth-password");
+        const authLoginBtn = document.getElementById("auth-login-btn");
+        const authError = document.getElementById("auth-error");
+        const smsState = {
+            page: 1,
+            pageSize: 50,
+            total: 0,
+            displayName: "",
+        };
+        const switchState = {
+            eventSource: null,
+            active: false,
+            task: null,
+        };
+        const authState = {
+            authenticated: false,
+        };
+
+        async function fetchJson(url, options = {}) {
+            const response = await fetch(url, options);
+            if (response.status === 401) {
+                handleUnauthorized();
+                throw new Error("需要先输入密码");
+            }
+            if (!response.ok) {
+                const detail = await response.text();
+                throw new Error(detail || `Request failed: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function showAuthOverlay(message = "") {
+            authOverlay.classList.add("active");
+            authState.authenticated = false;
+            authError.textContent = message;
+            authPasswordInput.value = "";
+            disconnectSwitchEventStream();
+            closeSwitchOverlayForce();
+        }
+
+        function hideAuthOverlay() {
+            authOverlay.classList.remove("active");
+            authError.textContent = "";
+            authState.authenticated = true;
+        }
+
+        function handleUnauthorized() {
+            showAuthOverlay("登录状态失效，请重新输入密码。");
+            setInteractiveDisabled(false);
+        }
+
+        function setNotice(message, isError = false) {
+            noticeEl.textContent = message;
+            noticeEl.style.color = isError ? "var(--danger)" : "var(--muted)";
+        }
+
+        function renderHealth(health) {
+            document.getElementById("adb-available").textContent = health.adb_available ? "YES" : "NO";
+            document.getElementById("monitor-running").textContent = health.monitor.running ? "RUN" : "STOP";
+            document.getElementById("device-count").textContent = String(health.adb_devices.length);
+            const healthPill = document.getElementById("health-pill");
+            healthPill.className = health.ok ? "pill" : "pill bad";
+            healthPill.textContent = health.ok ? "服务连接正常" : "服务已启动，但 ADB 不可用";
+            document.getElementById("health-detail").textContent = health.adb_error || `ADB 路径: ${health.adb_path}`;
+        }
+
+        function renderMonitor(status) {
+            const pill = document.getElementById("monitor-pill");
+            pill.className = status.connected ? "pill" : "pill bad";
+            const parts = [];
+            parts.push(status.connected ? "监听已连接" : "监听未连接");
+            if (status.restart_count > 0) {
+                parts.push(`重连 ${status.restart_count} 次`);
+            }
+            if (status.last_event_at) {
+                parts.push(`最近事件 ${status.last_event_at}`);
+            }
+            pill.textContent = parts.join(" · ");
+        }
+
+        function renderEsim(data) {
+            document.getElementById("esim-total").textContent = String(data.embedded_total_count);
+            document.getElementById("esim-active").textContent = String(data.embedded_active_count);
+            document.getElementById("esim-sync-at").textContent = data.collected_at || "-";
+            const names = [...new Set(data.subscriptions.map((item) => item.display_name).filter(Boolean))];
+            const currentValue = displayNameFilter.value;
+            displayNameFilter.innerHTML = '<option value="">全部名称</option>';
+            for (const name of names) {
+                const option = document.createElement("option");
+                option.value = name;
+                option.textContent = name;
+                displayNameFilter.appendChild(option);
+            }
+            if (names.includes(currentValue)) {
+                displayNameFilter.value = currentValue;
+            } else {
+                displayNameFilter.value = "";
+                smsState.displayName = "";
+            }
+            const tbody = document.getElementById("esim-table-body");
+            tbody.innerHTML = "";
+            if (!data.subscriptions.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="meta">暂无 eSIM 记录</td></tr>';
+                return;
+            }
+            for (const item of data.subscriptions) {
+                const row = document.createElement("tr");
+                const isActive = item.is_active;
+                row.innerHTML = `
+                    <td>${item.sub_id}</td>
+                    <td>${item.display_name || "-"}</td>
+                    <td>${item.carrier_name || "-"}</td>
+                    <td>${isActive ? "当前激活" : "未激活"}</td>
+                    <td>
+                        <button
+                            class="switch-btn secondary"
+                            type="button"
+                            data-display-name="${item.display_name || ""}"
+                            ${!item.display_name || isActive ? "disabled" : ""}
+                        >
+                            ${isActive ? "当前激活" : "切换到此 eSIM"}
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            }
+            tbody.querySelectorAll(".switch-btn[data-display-name]").forEach((button) => {
+                button.addEventListener("click", () => startEsimSwitch(button.dataset.displayName));
+            });
+        }
+
+        function renderSms(data) {
+            smsState.page = data.page;
+            smsState.pageSize = data.page_size;
+            smsState.total = data.total;
+            const totalPages = Math.max(1, Math.ceil(data.total / data.page_size));
+            pageIndicator.textContent = `第 ${data.page} / ${totalPages} 页`;
+            prevPageBtn.disabled = data.page <= 1;
+            nextPageBtn.disabled = data.page >= totalPages;
+            document.getElementById("sms-summary").textContent = `数据库共 ${data.total} 条历史短信，当前显示第 ${data.page} 页，每页 ${data.page_size} 条`;
+            const tbody = document.getElementById("sms-table-body");
+            tbody.innerHTML = "";
+            if (!data.items.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="meta">暂无短信记录</td></tr>';
+                return;
+            }
+            for (const item of data.items) {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${item.sms_id}</td>
+                    <td>${item.address || "-"}</td>
+                    <td>${item.display_name || "-"}</td>
+                    <td>${formatLocalDateTime(item.date_ts)}</td>
+                    <td class="sms-body">${item.body || ""}</td>
+                `;
+                tbody.appendChild(row);
+            }
+        }
+
+        function formatLocalDateTime(timestamp) {
+            if (timestamp === null || timestamp === undefined || Number.isNaN(Number(timestamp))) {
+                return "-";
+            }
+            const date = new Date(Number(timestamp));
+            if (Number.isNaN(date.getTime())) {
+                return "-";
+            }
+            const pad = (value) => String(value).padStart(2, "0");
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        }
+
+        async function loadSmsPage(page = smsState.page) {
+            const params = new URLSearchParams({
+                page: String(page),
+                page_size: String(smsState.pageSize),
+            });
+            if (smsState.displayName) {
+                params.set("display_name", smsState.displayName);
+            }
+            const sms = await fetchJson(`/api/sms?${params.toString()}`);
+            renderSms(sms);
+            return sms;
+        }
+
+        async function loadDashboard() {
+            try {
+                const [health, esim, monitor] = await Promise.all([
+                    fetchJson("/api/health"),
+                    fetchJson("/api/esim/latest"),
+                    fetchJson("/api/monitor/status"),
+                ]);
+                const sms = await loadSmsPage(smsState.page);
+                renderHealth(health);
+                renderEsim(esim);
+                renderMonitor(monitor);
+                const lastSync = health.last_sms_sync;
+                if (lastSync && lastSync.synced_at) {
+                    setNotice(`数据已刷新。最近短信同步：${lastSync.detail || "unknown"}，拉取 ${lastSync.fetched_count ?? 0}，新增 ${lastSync.inserted_count ?? 0}。`);
+                } else {
+                    setNotice("数据已刷新");
+                }
+            } catch (error) {
+                setNotice(error.message, true);
+            }
+        }
+
+        function setInteractiveDisabled(disabled) {
+            syncEsimBtn.disabled = disabled;
+            syncSmsBtn.disabled = disabled;
+            displayNameFilter.disabled = disabled;
+            prevPageBtn.disabled = disabled || prevPageBtn.disabled;
+            nextPageBtn.disabled = disabled || nextPageBtn.disabled;
+            document.querySelectorAll(".switch-btn").forEach((button) => {
+                if (disabled) {
+                    button.dataset.preDisabled = button.disabled ? "1" : "0";
+                    button.disabled = true;
+                } else if (button.dataset.preDisabled === "0") {
+                    button.disabled = false;
+                }
+            });
+            document.body.style.overflow = disabled ? "hidden" : "";
+        }
+
+        function renderSwitchTask(task) {
+            switchState.task = task;
+            switchOverlayTitle.textContent = task.status === "failed" ? "eSIM 切换失败" : task.status === "succeeded" ? "eSIM 切换完成" : "正在切换 eSIM";
+            const lastStep = task.steps && task.steps.length ? task.steps[task.steps.length - 1] : null;
+            if (task.status === "succeeded" && task.target_display_name) {
+                switchOverlaySubtitle.textContent = `${task.target_display_name} · 已确认切换成功`;
+            } else if (task.status === "failed" && task.target_display_name) {
+                switchOverlaySubtitle.textContent = `${task.target_display_name} · ${task.error || task.current_step || "切换失败"}`;
+            } else {
+                switchOverlaySubtitle.textContent = task.target_display_name
+                    ? `${task.target_display_name} · ${task.current_step || "等待下一步"}`
+                    : "等待任务开始...";
+            }
+            switchStepList.innerHTML = "";
+            for (const step of task.steps || []) {
+                const li = document.createElement("li");
+                li.innerHTML = `
+                    <strong>${step.title}</strong>
+                    <small>${step.timestamp}${step.detail ? ` · ${step.detail}` : ""}</small>
+                `;
+                switchStepList.appendChild(li);
+            }
+            if (task.latest_screenshot_url) {
+                switchPreviewImage.src = `${task.latest_screenshot_url}?t=${Date.now()}`;
+            } else {
+                switchPreviewImage.removeAttribute("src");
+            }
+            const done = task.status === "failed" || task.status === "succeeded";
+            switchOverlayClose.disabled = !done;
+            if (done) {
+                setInteractiveDisabled(false);
+                if (task.status === "succeeded") {
+                    setNotice(`eSIM 切换完成：${task.target_display_name}`);
+                } else {
+                    setNotice(`eSIM 切换失败：${task.error || "未知错误"}`, true);
+                }
+            }
+        }
+
+        function openSwitchOverlay() {
+            switchOverlay.classList.add("active");
+            setInteractiveDisabled(true);
+            switchState.active = true;
+        }
+
+        function closeSwitchOverlay() {
+            if (switchState.task && switchState.task.status === "running") {
+                return;
+            }
+            closeSwitchOverlayForce();
+        }
+
+        function closeSwitchOverlayForce() {
+            switchOverlay.classList.remove("active");
+            switchState.active = false;
+            switchOverlayClose.disabled = true;
+            setInteractiveDisabled(false);
+        }
+
+        function disconnectSwitchEventStream() {
+            if (switchState.eventSource) {
+                switchState.eventSource.close();
+                switchState.eventSource = null;
+            }
+        }
+
+        function ensureSwitchEventStream() {
+            if (switchState.eventSource || !authState.authenticated) {
+                return;
+            }
+            const source = new EventSource("/api/esim/switch/stream");
+            source.onerror = () => {
+                disconnectSwitchEventStream();
+            };
+            source.addEventListener("snapshot", (event) => {
+                const task = JSON.parse(event.data);
+                if (task.status !== "idle") {
+                    openSwitchOverlay();
+                    renderSwitchTask(task);
+                }
+            });
+            source.addEventListener("task_started", (event) => {
+                openSwitchOverlay();
+                renderSwitchTask(JSON.parse(event.data));
+            });
+            source.addEventListener("step", (event) => {
+                renderSwitchTask(JSON.parse(event.data));
+            });
+            source.addEventListener("task_succeeded", async (event) => {
+                renderSwitchTask(JSON.parse(event.data));
+                await loadDashboard();
+            });
+            source.addEventListener("task_failed", (event) => {
+                renderSwitchTask(JSON.parse(event.data));
+            });
+            switchState.eventSource = source;
+        }
+
+        async function startEsimSwitch(displayName) {
+            if (!displayName || switchState.task?.status === "running") {
+                return;
+            }
+            openSwitchOverlay();
+            switchOverlayTitle.textContent = "正在切换 eSIM";
+            switchOverlaySubtitle.textContent = `${displayName} · 正在创建任务`;
+            switchStepList.innerHTML = "";
+            try {
+                await fetchJson("/api/esim/switch", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ display_name: displayName }),
+                });
+            } catch (error) {
+                setInteractiveDisabled(false);
+                switchOverlay.classList.remove("active");
+                setNotice(`eSIM 切换失败：${error.message}`, true);
+            }
+        }
+
+        async function runAction(button, url, label) {
+            button.disabled = true;
+            setNotice(`${label}中...`);
+            try {
+                const result = await fetchJson(url, { method: "POST" });
+                smsState.page = 1;
+                await loadDashboard();
+                setNotice(`${label}完成：已调用 ${url}，拉取 ${result.fetched_count}，新增 ${result.inserted_count}，重复 ${result.duplicate_count}。页面当前显示第 1 页历史短信。`);
+            } catch (error) {
+                setNotice(`${label}失败：${error.message}`, true);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        syncEsimBtn.addEventListener("click", () => runAction(syncEsimBtn, "/api/esim/sync", "eSIM 同步"));
+        syncSmsBtn.addEventListener("click", () => runAction(syncSmsBtn, "/api/sms/sync-all", "历史短信全量同步"));
+        switchOverlayClose.addEventListener("click", closeSwitchOverlay);
+        displayNameFilter.addEventListener("change", async (event) => {
+            smsState.displayName = event.target.value;
+            smsState.page = 1;
+            try {
+                await loadDashboard();
+            } catch (error) {
+                setNotice(error.message, true);
+            }
+        });
+        prevPageBtn.addEventListener("click", async () => {
+            if (smsState.page <= 1) {
+                return;
+            }
+            smsState.page -= 1;
+            try {
+                await loadDashboard();
+            } catch (error) {
+                setNotice(error.message, true);
+            }
+        });
+        nextPageBtn.addEventListener("click", async () => {
+            const totalPages = Math.max(1, Math.ceil(smsState.total / smsState.pageSize));
+            if (smsState.page >= totalPages) {
+                return;
+            }
+            smsState.page += 1;
+            try {
+                await loadDashboard();
+            } catch (error) {
+                setNotice(error.message, true);
+            }
+        });
+
+        syncEsimBtn.insertAdjacentHTML("afterend", '<button id="auth-logout-btn" class="secondary" type="button">退出登录</button>');
+        const authLogoutBtn = document.getElementById("auth-logout-btn");
+        authLogoutBtn.addEventListener("click", async () => {
+            try {
+                await fetchJson("/api/auth/logout", { method: "POST" });
+            } catch (_) {
+                // Ignore logout network issues and reset UI locally.
+            }
+            showAuthOverlay();
+        });
+
+        authLoginBtn.addEventListener("click", async () => {
+            authLoginBtn.disabled = true;
+            authError.textContent = "";
+            try {
+                const result = await fetchJson("/api/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ password: authPasswordInput.value }),
+                });
+                if (result.authenticated) {
+                    hideAuthOverlay();
+                    ensureSwitchEventStream();
+                    await loadDashboard();
+                }
+            } catch (error) {
+                authError.textContent = error.message || "密码错误";
+            } finally {
+                authLoginBtn.disabled = false;
+            }
+        });
+
+        authPasswordInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                authLoginBtn.click();
+            }
+        });
+
+        (async () => {
+            try {
+                const status = await fetchJson("/api/auth/status");
+                if (!status.authenticated) {
+                    showAuthOverlay();
+                    return;
+                }
+                hideAuthOverlay();
+                ensureSwitchEventStream();
+                await loadDashboard();
+            } catch (_) {
+                showAuthOverlay();
+            }
+        })();
+    </script>
+</body>
+</html>
