@@ -8,9 +8,9 @@
     <style>
         :root {
             color-scheme: light;
-            --bg: #f6f0e5;
-            --panel: rgba(255, 255, 255, 0.82);
-            --panel-strong: #fffdf9;
+            --bg: #f4f7f6;
+            --panel: #ffffff;
+            --panel-strong: #f8fbfa;
             --text: #1f2937;
             --muted: #6b7280;
             --accent: #0f766e;
@@ -18,8 +18,8 @@
             --danger: #b91c1c;
             --warning: #b45309;
             --warning-soft: rgba(245, 158, 11, 0.16);
-            --border: rgba(15, 118, 110, 0.18);
-            --shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+            --border: #d8e5e2;
+            --shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
         }
 
         * {
@@ -30,38 +30,34 @@
             margin: 0;
             font-family: "Avenir Next", "PingFang SC", sans-serif;
             color: var(--text);
-            background:
-                radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 26%),
-                radial-gradient(circle at 85% 12%, rgba(245, 158, 11, 0.12), transparent 22%),
-                linear-gradient(160deg, #f7f1e7 0%, #eef6f3 100%);
+            background: var(--bg);
         }
 
         .page {
-            max-width: 1320px;
+            max-width: 1560px;
             margin: 0 auto;
-            padding: 26px 20px 52px;
+            padding: 18px 20px 44px;
         }
 
         .hero {
             display: flex;
             flex-wrap: wrap;
             justify-content: space-between;
-            gap: 24px;
+            gap: 18px;
             align-items: flex-start;
-            margin-bottom: 22px;
-            padding: 22px 24px;
-            background: rgba(255, 253, 249, 0.72);
-            border: 1px solid rgba(15, 118, 110, 0.12);
-            border-radius: 30px;
-            box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08);
-            backdrop-filter: blur(18px);
+            margin-bottom: 14px;
+            padding: 18px 20px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
         }
 
         .hero h1 {
             margin: 0;
-            font-size: clamp(2rem, 4vw, 3.4rem);
-            line-height: 1;
-            letter-spacing: -0.04em;
+            font-size: clamp(1.7rem, 3vw, 2.5rem);
+            line-height: 1.05;
+            letter-spacing: 0;
         }
 
         .hero p {
@@ -121,14 +117,29 @@
             gap: 16px;
         }
 
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 7fr) minmax(260px, 3fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .main-column,
+        .side-column {
+            display: grid;
+            gap: 16px;
+            min-width: 0;
+        }
+
         .card {
             grid-column: span 12;
             background: var(--panel);
             border: 1px solid var(--border);
-            border-radius: 28px;
+            border-radius: 8px;
             box-shadow: var(--shadow);
             padding: 20px;
-            backdrop-filter: blur(18px);
+            align-self: start;
+            min-width: 0;
         }
 
         .card h2 {
@@ -156,6 +167,7 @@
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 12px;
             margin-bottom: 16px;
+            align-items: start;
         }
 
         .stat {
@@ -163,14 +175,13 @@
             border-radius: 18px;
             padding: 14px 16px;
             border: 1px solid rgba(15, 118, 110, 0.12);
-            min-height: 118px;
         }
 
         .stat label {
             display: block;
             color: var(--muted);
             font-size: 0.86rem;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .stat strong {
@@ -193,6 +204,7 @@
             background: var(--accent-soft);
             color: var(--accent);
             font-size: 0.9rem;
+            white-space: nowrap;
         }
 
         .pill.bad {
@@ -214,7 +226,7 @@
             padding: 12px 10px;
             text-align: left;
             vertical-align: top;
-            border-top: 1px solid rgba(15, 118, 110, 0.09);
+            border-top: 1px solid #e6eeec;
             font-size: 0.94rem;
         }
 
@@ -233,9 +245,9 @@
 
         .meta-block {
             padding: 14px 16px;
-            border-radius: 18px;
-            background: rgba(255, 253, 249, 0.86);
-            border: 1px solid rgba(15, 118, 110, 0.1);
+            border-radius: 8px;
+            background: var(--panel-strong);
+            border: 1px solid #e1ebe8;
             line-height: 1.6;
         }
 
@@ -246,19 +258,24 @@
 
         .sms-body {
             white-space: pre-wrap;
-            max-width: 420px;
+            max-width: none;
+            min-width: 320px;
+            line-height: 1.55;
         }
 
         .table-shell {
-            border-radius: 22px;
+            border-radius: 8px;
             overflow: hidden;
-            background: rgba(255, 253, 249, 0.84);
-            border: 1px solid rgba(15, 118, 110, 0.1);
+            background: var(--panel);
+            border: 1px solid #e1ebe8;
+            min-width: 0;
         }
 
         .table-scroll {
-            max-height: 280px;
+            max-height: 260px;
             overflow: auto;
+            min-width: 0;
+            width: 100%;
         }
 
         .table-scroll table {
@@ -274,6 +291,72 @@
             margin-bottom: 14px;
         }
 
+        .sms-card {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .sms-card .toolbar {
+            align-items: flex-start;
+            padding: 18px 20px 14px;
+            margin-bottom: 0;
+            border-bottom: 1px solid #e1ebe8;
+            background: #fbfdfc;
+        }
+
+        .sms-card h2 {
+            font-size: 1.32rem;
+            margin-bottom: 6px;
+        }
+
+        .sms-card .toolbar-actions {
+            justify-content: flex-end;
+        }
+
+        .sms-card .table-shell {
+            border: 0;
+            border-radius: 0;
+        }
+
+        .sms-card .table-scroll {
+            max-height: min(68vh, 760px);
+            min-height: 560px;
+        }
+
+        .sms-card table {
+            table-layout: fixed;
+            min-width: 760px;
+        }
+
+        .sms-card th:nth-child(1),
+        .sms-card td:nth-child(1) {
+            width: 76px;
+        }
+
+        .sms-card th:nth-child(2),
+        .sms-card td:nth-child(2) {
+            width: 150px;
+        }
+
+        .sms-card th:nth-child(3),
+        .sms-card td:nth-child(3) {
+            width: 190px;
+        }
+
+        .sms-card th:nth-child(4),
+        .sms-card td:nth-child(4) {
+            width: 150px;
+        }
+
+        .sms-card td {
+            background: white;
+        }
+
+        .sms-card .notice {
+            padding: 0 20px 16px;
+            margin-top: 12px;
+        }
+
         .toolbar-actions {
             display: flex;
             align-items: center;
@@ -284,7 +367,7 @@
         .toolbar-actions select {
             appearance: none;
             border: 1px solid rgba(15, 118, 110, 0.22);
-            border-radius: 999px;
+            border-radius: 8px;
             background: white;
             color: var(--text);
             padding: 10px 14px;
@@ -323,7 +406,7 @@
             background: rgba(15, 118, 110, 0.96);
             color: white;
             padding: 14px 18px;
-            border-radius: 18px;
+            border-radius: 8px;
             box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
             font-size: 0.95rem;
             opacity: 0;
@@ -340,6 +423,7 @@
         .switch-btn {
             padding: 8px 12px;
             font-size: 0.86rem;
+            width: 100%;
         }
 
         .switch-btn[disabled] {
@@ -363,16 +447,16 @@
 
         .lock-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 12px;
             margin-bottom: 16px;
         }
 
         .lock-stat {
             background: var(--panel-strong);
-            border-radius: 18px;
+            border-radius: 8px;
             padding: 14px 16px;
-            border: 1px solid rgba(15, 118, 110, 0.12);
+            border: 1px solid #e1ebe8;
         }
 
         .lock-stat label {
@@ -389,17 +473,17 @@
 
         .log-list {
             display: grid;
-            gap: 12px;
-            max-height: 460px;
+            gap: 8px;
+            max-height: 240px;
             overflow: auto;
             padding-right: 4px;
         }
 
         .log-item {
-            background: rgba(255, 253, 249, 0.88);
-            border: 1px solid rgba(15, 118, 110, 0.1);
-            border-radius: 18px;
-            padding: 14px 16px;
+            background: var(--panel-strong);
+            border: 1px solid #e1ebe8;
+            border-radius: 8px;
+            padding: 12px 14px;
         }
 
         .log-item strong {
@@ -418,6 +502,115 @@
             display: block;
             color: var(--muted);
             margin-top: 6px;
+        }
+
+        .switch-target-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .switch-target-box {
+            min-width: 0;
+            padding: 14px;
+            border: 1px solid #e1ebe8;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .switch-target-box label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--muted);
+            font-size: 0.84rem;
+        }
+
+        .switch-target-box strong {
+            display: block;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+
+        .esim-switch-card .stats {
+            grid-template-columns: 1fr;
+        }
+
+        .esim-list {
+            display: grid;
+            gap: 10px;
+            max-height: 460px;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .esim-item {
+            display: grid;
+            gap: 10px;
+            padding: 12px;
+            border: 1px solid #e1ebe8;
+            border-radius: 8px;
+            background: var(--panel-strong);
+        }
+
+        .esim-item.selected {
+            border-color: rgba(15, 118, 110, 0.48);
+            background: #eefaf7;
+        }
+
+        .esim-item-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .esim-item-name {
+            min-width: 0;
+            font-weight: 700;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .esim-item-carrier {
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .esim-item-status {
+            flex: 0 0 auto;
+            color: var(--muted);
+            font-size: 0.82rem;
+            white-space: nowrap;
+        }
+
+        .esim-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            color: var(--muted);
+            font-size: 0.84rem;
+            line-height: 1.4;
+        }
+
+        .esim-kind-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #e7f5f2;
+            color: var(--accent);
+            border: 1px solid rgba(15, 118, 110, 0.14);
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .esim-kind-badge.physical {
+            background: #f3f4f6;
+            color: #4b5563;
+            border-color: rgba(107, 114, 128, 0.16);
         }
 
         .overlay {
@@ -458,7 +651,7 @@
         .auth-card {
             width: min(420px, 100%);
             background: rgba(255, 253, 249, 0.98);
-            border-radius: 28px;
+            border-radius: 8px;
             border: 1px solid rgba(15, 118, 110, 0.16);
             box-shadow: 0 30px 80px rgba(15, 23, 42, 0.14);
             padding: 28px;
@@ -477,7 +670,7 @@
         .auth-card input {
             width: 100%;
             border: 1px solid rgba(15, 118, 110, 0.22);
-            border-radius: 18px;
+            border-radius: 8px;
             padding: 14px 16px;
             font-size: 1rem;
             margin-bottom: 14px;
@@ -510,7 +703,7 @@
         .name-card {
             width: min(420px, 100%);
             background: rgba(255, 253, 249, 0.98);
-            border-radius: 28px;
+            border-radius: 8px;
             border: 1px solid rgba(15, 118, 110, 0.16);
             box-shadow: 0 30px 80px rgba(15, 23, 42, 0.14);
             padding: 28px;
@@ -529,7 +722,7 @@
         .name-card input {
             width: 100%;
             border: 1px solid rgba(15, 118, 110, 0.22);
-            border-radius: 18px;
+            border-radius: 8px;
             padding: 14px 16px;
             font-size: 1rem;
             margin-bottom: 14px;
@@ -593,7 +786,7 @@
             max-height: 88vh;
             overflow: auto;
             background: rgba(255, 253, 249, 0.97);
-            border-radius: 28px;
+            border-radius: 8px;
             box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
             padding: 24px;
             border: 1px solid rgba(15, 118, 110, 0.16);
@@ -631,7 +824,7 @@
 
         .switch-preview {
             background: #f3f6f5;
-            border-radius: 20px;
+            border-radius: 8px;
             border: 1px solid rgba(15, 118, 110, 0.12);
             padding: 14px;
             min-height: 280px;
@@ -640,13 +833,13 @@
         .switch-preview img {
             width: 100%;
             display: block;
-            border-radius: 16px;
+            border-radius: 8px;
             background: white;
         }
 
         .switch-steps {
             background: #fffdf9;
-            border-radius: 20px;
+            border-radius: 8px;
             border: 1px solid rgba(15, 118, 110, 0.12);
             padding: 14px;
         }
@@ -670,7 +863,7 @@
         .confirm-card {
             width: min(460px, 100%);
             background: rgba(255, 253, 249, 0.98);
-            border-radius: 28px;
+            border-radius: 8px;
             box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
             padding: 24px;
             border: 1px solid rgba(15, 118, 110, 0.16);
@@ -685,6 +878,10 @@
             margin: 0 0 18px;
             color: var(--muted);
             line-height: 1.6;
+        }
+
+        .confirm-card .switch-target-grid {
+            margin-bottom: 18px;
         }
 
         .lock-options {
@@ -708,7 +905,7 @@
             display: block;
             text-align: center;
             padding: 14px 10px;
-            border-radius: 18px;
+            border-radius: 8px;
             background: white;
             border: 1px solid rgba(15, 118, 110, 0.14);
             color: var(--text);
@@ -734,6 +931,10 @@
                 grid-column: span 4;
             }
 
+            .span-6 {
+                grid-column: span 6;
+            }
+
             .span-5 {
                 grid-column: span 5;
             }
@@ -747,7 +948,25 @@
             }
         }
 
+        @media (max-width: 1200px) {
+            .dashboard-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .side-column {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @media (max-width: 900px) {
+            .switch-target-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .side-column {
+                grid-template-columns: 1fr;
+            }
+
             .switch-grid {
                 grid-template-columns: 1fr;
             }
@@ -759,11 +978,50 @@
             .actions {
                 justify-content: flex-start;
             }
+
+            .sms-card .table-scroll {
+                min-height: 420px;
+            }
         }
 
         @media (max-width: 640px) {
             .lock-options {
                 grid-template-columns: 1fr;
+            }
+
+            .page {
+                padding: 12px;
+            }
+
+            .toolbar-actions,
+            .sms-card .toolbar-actions,
+            .pager {
+                width: 100%;
+            }
+
+            .sms-card .toolbar-actions {
+                align-items: stretch;
+            }
+
+            .sms-card .toolbar-actions > .pill {
+                justify-content: center;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                width: 100%;
+            }
+
+            .toolbar-actions select,
+            .pager button {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .pager {
+                justify-content: space-between;
+            }
+
+            .pager span {
+                flex: 0 0 auto;
             }
         }
     </style>
@@ -781,183 +1039,212 @@
             </div>
         </section>
 
-        <section class="grid">
-            <article class="card span-4">
-                <div class="card-top">
-                    <div>
-                        <h2>在线协作</h2>
-                        <p>多人同时打开页面时，这里会显示在线成员和远程鼠标协作状态。</p>
+        <section class="dashboard-layout">
+            <main class="main-column">
+                <article class="card switch-lock-card">
+                    <div class="lock-card-top">
+                        <div>
+                            <h2 style="margin-bottom: 6px;">切换锁定与日志</h2>
+                            <div class="meta" id="switch-log-summary">最近切换状态读取中</div>
+                        </div>
+                        <div id="switch-lock-pill" class="pill">未锁定</div>
                     </div>
-                    <div id="collab-pill" class="pill bad">协作未连接</div>
-                </div>
-                <div class="stats">
-                    <div class="stat">
-                        <label>在线人数</label>
-                        <strong id="collab-online-count">0</strong>
+                    <div class="lock-stats">
+                        <div class="lock-stat">
+                            <label>当前状态</label>
+                            <strong id="switch-lock-status">未锁定</strong>
+                        </div>
+                        <div class="lock-stat">
+                            <label>锁定到</label>
+                            <strong id="switch-lock-until">-</strong>
+                        </div>
+                        <div class="lock-stat">
+                            <label>剩余时间</label>
+                            <strong id="switch-lock-remaining">-</strong>
+                        </div>
+                        <div class="lock-stat">
+                            <label>最近目标 eSIM</label>
+                            <strong id="switch-lock-target">-</strong>
+                        </div>
                     </div>
-                    <div class="stat">
-                        <label>我的名字</label>
-                        <strong id="collab-self-name" class="compact">-</strong>
+                    <div id="switch-log-list" class="log-list">
+                        <div class="meta">暂无切换日志</div>
                     </div>
-                    <div class="stat">
-                        <label>我的 IP</label>
-                        <strong id="collab-self-ip" class="compact">-</strong>
+                </article>
+
+                <article class="card sms-card">
+                    <div class="toolbar">
+                        <div>
+                            <h2>收件箱短信</h2>
+                            <div class="meta" id="sms-summary">加载中</div>
+                        </div>
+                        <div class="toolbar-actions">
+                            <div class="pill" id="monitor-pill">监听状态读取中</div>
+                            <select id="display-name-filter" aria-label="按名称筛选">
+                                <option value="">全部名称</option>
+                            </select>
+                            <div class="pager">
+                                <button id="prev-page-btn" class="secondary" type="button">上一页</button>
+                                <span id="page-indicator">第 1 页</span>
+                                <button id="next-page-btn" class="secondary" type="button">下一页</button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="meta-stack">
-                    <div class="meta-block" id="collab-detail">登录后会自动加入在线协作并显示其他浏览器的鼠标位置。</div>
                     <div class="table-shell">
                         <div class="table-scroll">
-                            <table class="online-table">
+                            <table>
                                 <thead>
                                     <tr>
-                                        <th>名字</th>
-                                        <th>真实 IP</th>
-                                        <th>状态</th>
+                                        <th>短信 ID</th>
+                                        <th>号码</th>
+                                        <th>eSIM 名称</th>
+                                        <th>时间戳</th>
+                                        <th>内容</th>
                                     </tr>
                                 </thead>
-                                <tbody id="online-table-body"></tbody>
+                                <tbody id="sms-table-body"></tbody>
                             </table>
                         </div>
                     </div>
-                </div>
-            </article>
+                    <div class="notice" id="notice"></div>
+                </article>
+            </main>
 
-            <article class="card span-4">
-                <div class="card-top">
-                    <div>
-                        <h2>服务状态</h2>
-                        <p>这里聚合 ADB、监听线程和最近一次短信监听命中的运行信息。</p>
-                    </div>
-                    <div id="health-pill" class="pill">加载中</div>
-                </div>
-                <div class="stats">
-                    <div class="stat">
-                        <label>ADB 可用</label>
-                        <strong id="adb-available">-</strong>
-                    </div>
-                    <div class="stat">
-                        <label>监听线程</label>
-                        <strong id="monitor-running">-</strong>
-                    </div>
-                    <div class="stat">
-                        <label>已连接设备</label>
-                        <strong id="device-count">0</strong>
-                    </div>
-                    <div class="stat">
-                        <label>最近短信日志命中</label>
-                        <strong id="monitor-last-hit-at" style="font-size: 1rem;">-</strong>
-                        <span id="monitor-last-hit-source">Buffer: -</span>
-                    </div>
-                </div>
-                <div class="meta-stack">
-                    <div class="meta-block" id="health-detail"></div>
-                    <div class="meta-block" id="monitor-log-hit-summary">最近命中的短信日志摘要：-</div>
-                </div>
-            </article>
-
-            <article class="card span-4">
-                <div class="lock-card-top">
-                    <div>
-                        <h2 style="margin-bottom: 6px;">切换锁定与日志</h2>
-                        <div class="meta" id="switch-log-summary">最近切换状态读取中</div>
-                    </div>
-                    <div id="switch-lock-pill" class="pill">未锁定</div>
-                </div>
-                <div class="lock-stats">
-                    <div class="lock-stat">
-                        <label>当前状态</label>
-                        <strong id="switch-lock-status">未锁定</strong>
-                    </div>
-                    <div class="lock-stat">
-                        <label>锁定到</label>
-                        <strong id="switch-lock-until">-</strong>
-                    </div>
-                    <div class="lock-stat">
-                        <label>剩余时间</label>
-                        <strong id="switch-lock-remaining">-</strong>
-                    </div>
-                    <div class="lock-stat">
-                        <label>最近目标 eSIM</label>
-                        <strong id="switch-lock-target">-</strong>
-                    </div>
-                </div>
-                <div id="switch-log-list" class="log-list">
-                    <div class="meta">暂无切换日志</div>
-                </div>
-            </article>
-
-            <article class="card span-8">
-                <h2>eSIM 状态</h2>
-                <div class="stats">
-                    <div class="stat">
-                        <label>总 eSIM 数</label>
-                        <strong id="esim-total">0</strong>
-                    </div>
-                    <div class="stat">
-                        <label>当前激活 eSIM 数</label>
-                        <strong id="esim-active">0</strong>
-                    </div>
-                    <div class="stat">
-                        <label>最近同步</label>
-                        <strong id="esim-sync-at" style="font-size: 1rem;">-</strong>
-                    </div>
-                </div>
-                <div class="table-shell">
-                    <div class="table-scroll" style="max-height: 420px;">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Sub ID</th>
-                                    <th>名称</th>
-                                    <th>运营商</th>
-                                    <th>状态</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="esim-table-body"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </article>
-
-            <article class="card">
-                <div class="toolbar">
-                    <div>
-                        <h2 style="margin-bottom: 6px;">收件箱短信</h2>
-                        <div class="meta" id="sms-summary">加载中</div>
-                    </div>
-                    <div class="toolbar-actions">
-                        <select id="display-name-filter" aria-label="按名称筛选">
-                            <option value="">全部名称</option>
-                        </select>
-                        <div class="pager">
-                            <button id="prev-page-btn" class="secondary" type="button">上一页</button>
-                            <span id="page-indicator">第 1 页</span>
-                            <button id="next-page-btn" class="secondary" type="button">下一页</button>
+            <aside class="side-column">
+                <article class="card esim-switch-card">
+                    <div class="card-top">
+                        <div>
+                            <h2>eSIM 切换</h2>
+                            <p>点击“切换到此 eSIM”后，会先弹层确认目标卡和锁定时间。</p>
                         </div>
-                        <div class="pill" id="monitor-pill">监听状态读取中</div>
                     </div>
-                </div>
-                <div class="table-shell">
-                    <div class="table-scroll" style="max-height: 520px;">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>短信 ID</th>
-                                    <th>号码</th>
-                                    <th>eSIM 名称</th>
-                                    <th>时间戳</th>
-                                    <th>内容</th>
-                                </tr>
-                            </thead>
-                            <tbody id="sms-table-body"></tbody>
-                        </table>
+                    <div class="stats">
+                        <div class="stat">
+                            <label>总 eSIM 数</label>
+                            <strong id="esim-total">0</strong>
+                        </div>
+                        <div class="stat">
+                            <label>当前激活 eSIM 数</label>
+                            <strong id="esim-active">0</strong>
+                        </div>
+                        <div class="stat">
+                            <label>最近同步</label>
+                            <strong id="esim-sync-at" class="compact">-</strong>
+                        </div>
                     </div>
-                </div>
-                <div class="notice" id="notice"></div>
-            </article>
+                    <div id="esim-table-body" class="esim-list"></div>
+                </article>
+
+                <article class="card">
+                    <div class="card-top">
+                        <div>
+                            <h2>服务状态</h2>
+                            <p>ADB、监听线程和短信日志命中情况。</p>
+                        </div>
+                        <div id="health-pill" class="pill">加载中</div>
+                    </div>
+                    <div class="stats">
+                        <div class="stat">
+                            <label>ADB 可用</label>
+                            <strong id="adb-available">-</strong>
+                        </div>
+                        <div class="stat">
+                            <label>监听线程</label>
+                            <strong id="monitor-running">-</strong>
+                        </div>
+                        <div class="stat">
+                            <label>已连接设备</label>
+                            <strong id="device-count">0</strong>
+                        </div>
+                        <div class="stat">
+                            <label>最近短信日志命中</label>
+                            <strong id="monitor-last-hit-at" class="compact">-</strong>
+                            <span id="monitor-last-hit-source">Buffer: -</span>
+                        </div>
+                    </div>
+                    <div class="meta-stack">
+                        <div class="meta-block" id="health-detail"></div>
+                        <div class="meta-block" id="monitor-log-hit-summary">最近命中的短信日志摘要：-</div>
+                    </div>
+                </article>
+
+                <article class="card">
+                    <div class="card-top">
+                        <div>
+                            <h2>在线协作</h2>
+                            <p>在线成员和远程鼠标协作状态。</p>
+                        </div>
+                        <div id="collab-pill" class="pill bad">协作未连接</div>
+                    </div>
+                    <div class="stats">
+                        <div class="stat">
+                            <label>在线人数</label>
+                            <strong id="collab-online-count">0</strong>
+                        </div>
+                        <div class="stat">
+                            <label>我的名字</label>
+                            <strong id="collab-self-name" class="compact">-</strong>
+                        </div>
+                        <div class="stat">
+                            <label>我的 IP</label>
+                            <strong id="collab-self-ip" class="compact">-</strong>
+                        </div>
+                    </div>
+                    <div class="meta-stack">
+                        <div class="meta-block" id="collab-detail">登录后会自动加入在线协作并显示其他浏览器的鼠标位置。</div>
+                        <div class="table-shell">
+                            <div class="table-scroll">
+                                <table class="online-table">
+                                    <thead>
+                                        <tr>
+                                            <th>名字</th>
+                                            <th>真实 IP</th>
+                                            <th>状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="online-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </aside>
         </section>
+    </div>
+
+    <div id="switch-confirm-overlay" class="overlay" aria-live="polite" aria-modal="true">
+        <div class="confirm-card">
+            <h2>确认切换 eSIM</h2>
+            <p id="switch-confirm-subtitle">请确认目标卡和切换后的锁定时间。</p>
+            <div class="switch-target-grid">
+                <div class="switch-target-box">
+                    <label>当前激活卡</label>
+                    <strong id="switch-current-esim">-</strong>
+                </div>
+                <div class="switch-target-box">
+                    <label>待切换目标</label>
+                    <strong id="switch-pending-target">-</strong>
+                </div>
+            </div>
+            <div class="lock-options">
+                <label class="lock-option">
+                    <input type="radio" name="lock-minutes" value="10" checked />
+                    <span>10 分钟</span>
+                </label>
+                <label class="lock-option">
+                    <input type="radio" name="lock-minutes" value="20" />
+                    <span>20 分钟</span>
+                </label>
+                <label class="lock-option">
+                    <input type="radio" name="lock-minutes" value="30" />
+                    <span>30 分钟</span>
+                </label>
+            </div>
+            <div class="confirm-actions">
+                <button id="switch-confirm-cancel" class="secondary" type="button">取消</button>
+                <button id="switch-confirm-submit" type="button" disabled>确认切换</button>
+            </div>
+        </div>
     </div>
 
     <div id="switch-overlay" class="overlay" aria-live="polite" aria-modal="true">
@@ -976,31 +1263,6 @@
                 <div class="switch-steps">
                     <ol id="switch-step-list"></ol>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="switch-confirm-overlay" class="overlay" aria-live="polite" aria-modal="true">
-        <div class="confirm-card">
-            <h2>确认切换锁定时长</h2>
-            <p id="switch-confirm-message">切换成功后，在锁定时间内将无法再次切换 eSIM。</p>
-            <div class="lock-options">
-                <label class="lock-option">
-                    <input type="radio" name="lock-minutes" value="10" checked />
-                    <span>10 分钟</span>
-                </label>
-                <label class="lock-option">
-                    <input type="radio" name="lock-minutes" value="20" />
-                    <span>20 分钟</span>
-                </label>
-                <label class="lock-option">
-                    <input type="radio" name="lock-minutes" value="30" />
-                    <span>30 分钟</span>
-                </label>
-            </div>
-            <div class="confirm-actions">
-                <button id="switch-confirm-cancel" class="ghost" type="button">取消</button>
-                <button id="switch-confirm-submit" type="button">确认切换</button>
             </div>
         </div>
     </div>
@@ -1037,16 +1299,18 @@
         const nextPageBtn = document.getElementById("next-page-btn");
         const pageIndicator = document.getElementById("page-indicator");
         const displayNameFilter = document.getElementById("display-name-filter");
+        const switchConfirmOverlay = document.getElementById("switch-confirm-overlay");
+        const switchConfirmSubtitle = document.getElementById("switch-confirm-subtitle");
+        const switchConfirmCancel = document.getElementById("switch-confirm-cancel");
         const switchOverlay = document.getElementById("switch-overlay");
         const switchOverlayTitle = document.getElementById("switch-overlay-title");
         const switchOverlaySubtitle = document.getElementById("switch-overlay-subtitle");
         const switchOverlayClose = document.getElementById("switch-overlay-close");
         const switchPreviewImage = document.getElementById("switch-preview-image");
         const switchStepList = document.getElementById("switch-step-list");
-        const switchConfirmOverlay = document.getElementById("switch-confirm-overlay");
-        const switchConfirmMessage = document.getElementById("switch-confirm-message");
-        const switchConfirmCancel = document.getElementById("switch-confirm-cancel");
         const switchConfirmSubmit = document.getElementById("switch-confirm-submit");
+        const switchCurrentEsim = document.getElementById("switch-current-esim");
+        const switchPendingTarget = document.getElementById("switch-pending-target");
         const authOverlay = document.getElementById("auth-overlay");
         const authPasswordInput = document.getElementById("auth-password");
         const authLoginBtn = document.getElementById("auth-login-btn");
@@ -1084,6 +1348,7 @@
         const switchState = {
             eventSource: null,
             active: false,
+            confirmActive: false,
             task: null,
             lockTimer: null,
             latestEsim: null,
@@ -1141,8 +1406,8 @@
             disconnectCollab();
             clearSwitchLockTimer();
             hideNameOverlay();
+            closeSwitchConfirmOverlayForce();
             closeSwitchOverlayForce();
-            closeSwitchConfirmOverlay();
         }
 
         function hideAuthOverlay() {
@@ -1312,53 +1577,76 @@
                 smsState.displayName = "";
             }
             renderEsimTable();
+            renderSwitchConfirmOverlay();
         }
 
         function renderEsimTable() {
             const data = switchState.latestEsim;
-            const tbody = document.getElementById("esim-table-body");
-            tbody.innerHTML = "";
+            const list = document.getElementById("esim-table-body");
+            list.innerHTML = "";
             if (!data || !data.subscriptions?.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="meta">暂无 eSIM 记录</td></tr>';
+                list.innerHTML = '<div class="meta">暂无 eSIM 记录</div>';
+                renderSwitchConfirmOverlay();
                 return;
             }
 
             const lockActive = Boolean(switchState.task?.lock_active);
             const isRunning = switchState.task?.status === "running";
+            const validPending = data.subscriptions.some((item) => item.display_name === switchState.pendingDisplayName && !item.is_active);
+            if (switchState.pendingDisplayName && (!validPending || lockActive || isRunning)) {
+                switchState.pendingDisplayName = null;
+                if (switchState.confirmActive) {
+                    closeSwitchConfirmOverlayForce(false);
+                }
+            }
             for (const item of data.subscriptions) {
-                const row = document.createElement("tr");
+                const card = document.createElement("div");
                 const isActive = item.is_active;
-                const disabled = !item.display_name || isActive || lockActive || isRunning;
-                let buttonText = "切换到此 eSIM";
+                const isEmbedded = Boolean(item.is_embedded);
+                const disabled = !item.display_name || !isEmbedded || isActive || lockActive || isRunning || switchState.isSubmittingConfirm;
+                const selected = item.display_name && item.display_name === switchState.pendingDisplayName && switchState.confirmActive;
+                let buttonText = selected ? "待确认" : "切换到此 eSIM";
                 if (isActive) {
                     buttonText = "当前激活";
+                } else if (!isEmbedded) {
+                    buttonText = "实体卡";
                 } else if (isRunning) {
                     buttonText = "切换进行中";
                 } else if (lockActive) {
                     buttonText = "锁定中";
                 }
-                row.innerHTML = `
-                    <td>${item.sub_id}</td>
-                    <td>${item.display_name || "-"}</td>
-                    <td>${item.carrier_name || "-"}</td>
-                    <td>${isActive ? "当前激活" : "未激活"}</td>
-                    <td>
-                        <button
-                            class="switch-btn secondary"
-                            type="button"
-                            data-display-name="${item.display_name || ""}"
-                            ${disabled ? "disabled" : ""}
-                        >
-                            ${buttonText}
-                        </button>
-                    </td>
+                const kindLabel = isEmbedded ? "eSIM" : "实体 SIM";
+                const kindClass = isEmbedded ? "esim-kind-badge" : "esim-kind-badge physical";
+                const slotText = item.sim_slot_index === null || item.sim_slot_index === undefined
+                    ? ""
+                    : ` · 卡槽 ${item.sim_slot_index}`;
+                card.className = selected ? "esim-item selected" : "esim-item";
+                card.innerHTML = `
+                    <div class="esim-item-top">
+                        <div class="esim-item-name">${item.display_name || "-"}</div>
+                        <div class="esim-item-status">${isActive ? "当前激活" : "未激活"}</div>
+                    </div>
+                    <div class="esim-item-carrier">${item.carrier_name || "运营商未知"} · Sub ID ${item.sub_id}</div>
+                    <div class="esim-item-meta">
+                        <span class="${kindClass}">${kindLabel}</span>
+                        <span>${isEmbedded ? "可用于 eSIM 切换" : `非 eSIM${slotText}`}</span>
+                    </div>
+                    <button
+                        class="switch-btn secondary"
+                        type="button"
+                        data-display-name="${item.display_name || ""}"
+                        ${disabled ? "disabled" : ""}
+                    >
+                        ${buttonText}
+                    </button>
                 `;
-                tbody.appendChild(row);
+                list.appendChild(card);
             }
 
-            tbody.querySelectorAll(".switch-btn[data-display-name]").forEach((button) => {
-                button.addEventListener("click", () => openSwitchConfirmOverlay(button.dataset.displayName));
+            list.querySelectorAll(".switch-btn[data-display-name]").forEach((button) => {
+                button.addEventListener("click", () => selectSwitchTarget(button.dataset.displayName));
             });
+            renderSwitchConfirmOverlay();
         }
 
         function renderEsimError(message) {
@@ -1367,8 +1655,10 @@
             document.getElementById("esim-active").textContent = "-";
             document.getElementById("esim-sync-at").textContent = "-";
             displayNameFilter.innerHTML = '<option value="">全部名称</option>';
-            const tbody = document.getElementById("esim-table-body");
-            tbody.innerHTML = `<tr><td colspan="5" class="meta">${message}</td></tr>`;
+            switchState.pendingDisplayName = null;
+            const list = document.getElementById("esim-table-body");
+            list.innerHTML = `<div class="meta">${message}</div>`;
+            renderSwitchConfirmOverlay();
         }
 
         function renderSms(data) {
@@ -1413,8 +1703,12 @@
             switchState.task = status;
             renderSwitchLockCard(status);
             renderEsimTable();
+            renderSwitchConfirmOverlay();
             scheduleSwitchLockRefresh(status);
 
+            if (status.status === "running" && switchState.confirmActive) {
+                closeSwitchConfirmOverlayForce();
+            }
             if (status.status === "running" || (switchState.active && priorTask)) {
                 renderSwitchTask(status);
             }
@@ -1530,6 +1824,7 @@
                 switchState.task.lock_remaining_seconds = remainingSeconds;
                 renderSwitchLockCard(switchState.task);
                 renderEsimTable();
+                renderSwitchConfirmOverlay();
                 if (remainingSeconds <= 0) {
                     clearSwitchLockTimer();
                     try {
@@ -1642,6 +1937,7 @@
             nextPageBtn.disabled = disabled || nextPageBtn.disabled;
             document.body.style.overflow = disabled ? "hidden" : "";
             renderEsimTable();
+            renderSwitchConfirmOverlay();
         }
 
         function renderSwitchTask(task) {
@@ -1683,6 +1979,8 @@
         }
 
         function openSwitchOverlay() {
+            switchConfirmOverlay.classList.remove("active");
+            switchState.confirmActive = false;
             switchOverlay.classList.add("active");
             setInteractiveDisabled(true);
             switchState.active = true;
@@ -1702,25 +2000,40 @@
             setInteractiveDisabled(false);
         }
 
-        function openSwitchConfirmOverlay(displayName) {
+        function selectSwitchTarget(displayName) {
             if (!displayName || switchState.task?.status === "running" || switchState.task?.lock_active) {
                 return;
             }
             switchState.pendingDisplayName = displayName;
-            switchConfirmMessage.textContent = `即将切换到 ${displayName}。切换成功后，在锁定时间内将无法再次切换 eSIM。`;
+            switchState.confirmActive = true;
             switchConfirmOverlay.classList.add("active");
-            document.body.style.overflow = "hidden";
+            renderSwitchConfirmOverlay();
+            setInteractiveDisabled(true);
+            setNotice(`准备切换 eSIM：${displayName}。请在弹层里确认锁定时间后提交。`);
         }
 
-        function closeSwitchConfirmOverlay() {
-            if (switchState.isSubmittingConfirm) {
-                return;
-            }
-            switchConfirmOverlay.classList.remove("active");
+        function clearPendingSwitchTarget() {
             switchState.pendingDisplayName = null;
-            if (!switchState.active) {
-                document.body.style.overflow = "";
-            }
+            renderSwitchConfirmOverlay();
+        }
+
+        function getActiveEsimName() {
+            const activeItem = switchState.latestEsim?.subscriptions?.find((item) => item.is_active);
+            return activeItem?.display_name || "-";
+        }
+
+        function renderSwitchConfirmOverlay() {
+            const lockActive = Boolean(switchState.task?.lock_active);
+            const isRunning = switchState.task?.status === "running";
+            const pendingName = switchState.pendingDisplayName;
+            switchCurrentEsim.textContent = getActiveEsimName();
+            switchPendingTarget.textContent = pendingName || "-";
+            switchConfirmSubtitle.textContent = pendingName
+                ? `即将切换到 ${pendingName}，请确认锁定时间。`
+                : "请确认目标卡和切换后的锁定时间。";
+            switchConfirmCancel.disabled = switchState.isSubmittingConfirm;
+            switchConfirmSubmit.textContent = switchState.isSubmittingConfirm ? "提交中..." : "确认切换";
+            switchConfirmSubmit.disabled = !pendingName || lockActive || isRunning || switchState.isSubmittingConfirm;
         }
 
         function getSelectedLockMinutes() {
@@ -1996,28 +2309,48 @@
                 return;
             }
             switchState.isSubmittingConfirm = true;
-            switchConfirmSubmit.disabled = true;
-            switchConfirmCancel.disabled = true;
+            renderSwitchConfirmOverlay();
+            renderEsimTable();
             try {
                 await fetchJson("/api/esim/switch", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ display_name: displayName, lock_minutes: lockMinutes }),
                 });
-                closeSwitchConfirmOverlay();
+                switchState.pendingDisplayName = null;
+                switchState.confirmActive = false;
+                switchConfirmOverlay.classList.remove("active");
                 openSwitchOverlay();
                 switchOverlayTitle.textContent = "正在切换 eSIM";
                 switchOverlaySubtitle.textContent = `${displayName} · 正在创建任务`;
                 switchStepList.innerHTML = "";
             } catch (error) {
-                setInteractiveDisabled(false);
-                closeSwitchConfirmOverlay();
+                closeSwitchConfirmOverlayForce();
                 setNotice(`eSIM 切换失败：${error.message}`, true);
                 await loadSwitchSection();
             } finally {
                 switchState.isSubmittingConfirm = false;
-                switchConfirmSubmit.disabled = false;
-                switchConfirmCancel.disabled = false;
+                renderSwitchConfirmOverlay();
+                renderEsimTable();
+            }
+        }
+
+        function closeSwitchConfirmOverlay() {
+            if (switchState.isSubmittingConfirm) {
+                return;
+            }
+            closeSwitchConfirmOverlayForce();
+        }
+
+        function closeSwitchConfirmOverlayForce(resetPending = true) {
+            switchConfirmOverlay.classList.remove("active");
+            switchState.confirmActive = false;
+            if (resetPending) {
+                switchState.pendingDisplayName = null;
+            }
+            renderSwitchConfirmOverlay();
+            if (!switchState.active) {
+                setInteractiveDisabled(false);
             }
         }
 
@@ -2038,8 +2371,8 @@
 
         syncEsimBtn.addEventListener("click", () => runAction(syncEsimBtn, "/api/esim/sync", "eSIM 同步"));
         syncSmsBtn.addEventListener("click", () => runAction(syncSmsBtn, "/api/sms/sync-all", "历史短信全量同步"));
-        switchOverlayClose.addEventListener("click", closeSwitchOverlay);
         switchConfirmCancel.addEventListener("click", closeSwitchConfirmOverlay);
+        switchOverlayClose.addEventListener("click", closeSwitchOverlay);
         switchConfirmSubmit.addEventListener("click", async () => {
             await startEsimSwitch(switchState.pendingDisplayName, getSelectedLockMinutes());
         });
