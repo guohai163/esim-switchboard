@@ -170,3 +170,18 @@ class HealthResponse(BaseModel):
     monitor: MonitorStatusResponse
     last_sms_sync: dict[str, Any] | None = None
     last_esim_sync: dict[str, Any] | None = None
+
+
+class CollabCursorOut(BaseModel):
+    x_ratio: float
+    y_ratio: float
+    updated_at: str
+
+
+class CollabParticipantOut(BaseModel):
+    id: str
+    name: str
+    ip: str
+    connected_at: str
+    last_seen_at: str
+    cursor: CollabCursorOut | None = None

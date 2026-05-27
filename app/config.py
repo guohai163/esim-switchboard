@@ -32,6 +32,10 @@ class AppConfig:
     app_password: str
     app_auth_cookie_name: str
     app_auth_cookie_value: str
+    trust_proxy_headers: bool
+    collab_presence_timeout_seconds: float
+    collab_ping_interval_seconds: float
+    collab_cursor_throttle_ms: int
 
     @classmethod
     def from_env(cls, base_dir: Path | None = None) -> "AppConfig":
@@ -40,6 +44,7 @@ class AppConfig:
         app_auth_cookie_name = os.getenv("APP_AUTH_COOKIE_NAME", "esim_switch_auth")
         auth_source = f"{app_auth_cookie_name}:{app_password}".encode("utf-8")
         app_auth_cookie_value = hashlib.sha256(auth_source).hexdigest()
+        trust_proxy_headers = os.getenv("TRUST_PROXY_HEADERS", "false").strip().lower() in {"1", "true", "yes", "on"}
         return cls(
             base_dir=resolved_base_dir,
             db_path=Path(os.getenv("DB_PATH", resolved_base_dir / "db.sqlite")),
@@ -93,6 +98,10 @@ class AppConfig:
             app_password=app_password,
             app_auth_cookie_name=app_auth_cookie_name,
             app_auth_cookie_value=app_auth_cookie_value,
+            trust_proxy_headers=trust_proxy_headers,
+            collab_presence_timeout_seconds=float(os.getenv("COLLAB_PRESENCE_TIMEOUT_SECONDS", "15")),
+            collab_ping_interval_seconds=float(os.getenv("COLLAB_PING_INTERVAL_SECONDS", "5")),
+            collab_cursor_throttle_ms=int(os.getenv("COLLAB_CURSOR_THROTTLE_MS", "50")),
         )
 
 

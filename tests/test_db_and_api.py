@@ -2,8 +2,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.adb import AdbClient, AdbCommandError
+from app.collab import CollabSessionService
 from app.config import AppConfig
 from app.db import Database
 from app.main import build_services, create_app
@@ -223,6 +225,31 @@ def make_test_services(tmp_path: Path) -> tuple[AppConfig, AppServices]:
     return config, services
 
 
+def make_test_client_with_config(tmp_path: Path, *, trust_proxy_headers: bool = False) -> TestClient:
+    config = AppConfig.from_env(tmp_path)
+    config.adb_path = "/tmp/fake-adb"
+    config.app_password = "secret123"
+    config.app_auth_cookie_name = "esim_switch_auth"
+    config.app_auth_cookie_value = "signed-secret-cookie"
+    config.trust_proxy_headers = trust_proxy_headers
+    config.collab_presence_timeout_seconds = 0.1
+    config.collab_ping_interval_seconds = 0.05
+    services = build_services(config)
+    services.adb_client = FakeAdbClient()
+    services.esim_service.adb_client = services.adb_client
+    services.sms_service.adb_client = services.adb_client
+    services.monitor.adb_client = services.adb_client
+    services.monitor.sms_service = services.sms_service
+    services.switch_service = FakeSwitchService()
+    services.sms_event_service = FakeSmsEventService()
+    services.monitor.sms_event_service = services.sms_event_service
+    services.db.init_schema()
+    services.esim_service.sync()
+    services.sms_service.sync_all_inbox()
+    app = create_app(config=config, services=services, auto_startup=False)
+    return TestClient(app)
+
+
 def test_database_upsert_sms_deduplicates(tmp_path: Path) -> None:
     db = Database(tmp_path / "db.sqlite")
     db.init_schema()
@@ -327,6 +354,152 @@ def test_auth_protects_business_apis(tmp_path: Path) -> None:
     assert logout.status_code == 200
     assert auth_status_final.json()["authenticated"] is False
     assert unauthorized_again.status_code == 401
+
+
+def test_collab_websocket_requires_auth(tmp_path: Path) -> None:
+    client = make_test_client_with_config(tmp_path)
+
+    try:
+        with client.websocket_connect("/api/collab/ws"):
+            raise AssertionError("Expected websocket authentication to fail")
+    except WebSocketDisconnect as exc:
+        assert exc.code == 4401
+
+
+def test_collab_join_and_cursor_broadcast(tmp_path: Path) -> None:
+    client = make_test_client_with_config(tmp_path)
+    login = client.post("/api/auth/login", json={"password": "secret123"})
+
+    assert login.status_code == 200
+
+    with client.websocket_connect("/api/collab/ws") as ws_a, client.websocket_connect("/api/collab/ws") as ws_b:
+        ws_a.send_json({"type": "join", "name": "Alice"})
+        snapshot_a = ws_a.receive_json()
+        assert snapshot_a["type"] == "snapshot"
+        assert snapshot_a["online_count"] == 1
+        self_a = snapshot_a["self_id"]
+
+        ws_b.send_json({"type": "join", "name": "Bob"})
+        presence_for_a = ws_a.receive_json()
+        snapshot_b = ws_b.receive_json()
+
+        assert presence_for_a["type"] == "presence"
+        assert presence_for_a["online_count"] == 2
+        assert {item["name"] for item in presence_for_a["participants"]} == {"Alice", "Bob"}
+        assert snapshot_b["type"] == "snapshot"
+        assert snapshot_b["online_count"] == 2
+        assert {item["name"] for item in snapshot_b["participants"]} == {"Alice", "Bob"}
+
+        ws_a.send_json({"type": "cursor", "x_ratio": 1.4, "y_ratio": -2})
+        cursor_for_b = ws_b.receive_json()
+
+        assert cursor_for_b["type"] == "cursor"
+        assert cursor_for_b["participant"]["id"] == self_a
+        assert cursor_for_b["participant"]["cursor"]["x_ratio"] == 1.0
+        assert cursor_for_b["participant"]["cursor"]["y_ratio"] == 0.0
+
+
+def test_collab_service_disconnect_broadcasts_remove_and_presence(tmp_path: Path) -> None:
+    config = AppConfig.from_env(tmp_path)
+    service = CollabSessionService(config)
+
+    class DummyWebSocket:
+        def __init__(self) -> None:
+            self.messages: list[dict] = []
+
+        async def send_json(self, payload):  # noqa: ANN001, ANN201
+            self.messages.append(payload)
+
+    async def run_disconnect_case() -> None:
+        socket_a = DummyWebSocket()
+        socket_b = DummyWebSocket()
+        snapshot_a = await service.join(socket_a, "Alice", "127.0.0.1")
+        snapshot_b = await service.join(socket_b, "Bob", "127.0.0.2")
+        await service.disconnect(snapshot_b["self_id"])
+
+        assert socket_a.messages[0]["type"] == "presence"
+        assert socket_a.messages[-2]["type"] == "remove"
+        assert socket_a.messages[-2]["participant_id"] == snapshot_b["self_id"]
+        assert socket_a.messages[-1]["type"] == "presence"
+        assert socket_a.messages[-1]["online_count"] == 1
+        assert [item["name"] for item in socket_a.messages[-1]["participants"]] == ["Alice"]
+        assert snapshot_a["self_id"] != snapshot_b["self_id"]
+
+    import asyncio
+
+    asyncio.run(run_disconnect_case())
+
+
+def test_collab_prefers_cf_connecting_ip(tmp_path: Path) -> None:
+    client = make_test_client_with_config(tmp_path, trust_proxy_headers=True)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    with client.websocket_connect(
+        "/api/collab/ws",
+        headers={
+            "CF-Connecting-IP": "198.51.100.7",
+            "Forwarded": 'for="198.51.100.8:443";proto=https',
+            "X-Forwarded-For": "203.0.113.9",
+        },
+    ) as websocket:
+        websocket.send_json({"type": "join", "name": "ProxyUser"})
+        snapshot = websocket.receive_json()
+
+    participant = snapshot["participants"][0]
+    assert participant["ip"] == "198.51.100.7"
+
+
+def test_collab_falls_back_to_forwarded_client_ip(tmp_path: Path) -> None:
+    client = make_test_client_with_config(tmp_path, trust_proxy_headers=True)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    with client.websocket_connect(
+        "/api/collab/ws",
+        headers={"Forwarded": 'for="198.51.100.8:443";proto=https', "X-Forwarded-For": "203.0.113.9"},
+    ) as websocket:
+        websocket.send_json({"type": "join", "name": "ProxyUser"})
+        snapshot = websocket.receive_json()
+
+    participant = snapshot["participants"][0]
+    assert participant["ip"] == "198.51.100.8"
+
+
+def test_collab_ignores_forward_headers_when_proxy_trust_disabled(tmp_path: Path) -> None:
+    client = make_test_client_with_config(tmp_path, trust_proxy_headers=False)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    with client.websocket_connect(
+        "/api/collab/ws",
+        headers={"X-Forwarded-For": "203.0.113.9"},
+    ) as websocket:
+        websocket.send_json({"type": "join", "name": "LocalUser"})
+        snapshot = websocket.receive_json()
+
+    participant = snapshot["participants"][0]
+    assert participant["ip"] in {"testclient", "127.0.0.1"}
+
+
+def test_collab_service_timeout_prunes_stale_participants(tmp_path: Path) -> None:
+    config = AppConfig.from_env(tmp_path)
+    config.collab_presence_timeout_seconds = 0.01
+    service = CollabSessionService(config)
+
+    class DummyWebSocket:
+        async def send_json(self, payload):  # noqa: ANN001, ANN201
+            return payload
+
+    async def run_timeout_case() -> None:
+        snapshot = await service.join(DummyWebSocket(), "Alice", "127.0.0.1")
+        participant_id = snapshot["self_id"]
+        async with service._lock:  # noqa: SLF001
+            service._participants[participant_id].last_seen_monotonic -= 1  # noqa: SLF001
+        removed_payloads = await service._remove_expired_participants()  # noqa: SLF001
+        assert removed_payloads
+        assert removed_payloads[0][1]["type"] == "remove"
+
+    import asyncio
+
+    asyncio.run(run_timeout_case())
 
 
 def test_index_and_favicon_are_publicly_accessible(tmp_path: Path) -> None:

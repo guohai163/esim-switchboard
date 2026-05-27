@@ -6,13 +6,14 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response, status
+from fastapi import FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.adb import AdbClient, AdbCommandError
+from app.collab import CollabSessionService
 from app.config import AppConfig
 from app.db import Database
 from app.models import (
@@ -50,6 +51,7 @@ def build_services(config: AppConfig) -> AppServices:
     sms_event_service = SmsEventService()
     monitor = SmsMonitor(config, db, sms_service, adb_client, sms_event_service=sms_event_service)
     switch_service = EsimSwitchService(config, db, esim_service)
+    collab_service = CollabSessionService(config)
     return AppServices(
         config=config,
         db=db,
@@ -59,6 +61,7 @@ def build_services(config: AppConfig) -> AppServices:
         monitor=monitor,
         switch_service=switch_service,
         sms_event_service=sms_event_service,
+        collab_service=collab_service,
     )
 
 
@@ -78,11 +81,21 @@ def create_app(
     async def lifespan(app: FastAPI):
         app.state.services = resolved_services
         app.state.config = resolved_config
+        app.state.collab_stop_event = asyncio.Event()
+        app.state.collab_cleanup_task = asyncio.create_task(
+            resolved_services.collab_service.run_cleanup_loop(app.state.collab_stop_event)
+        )
         if auto_startup:
             initialize_services(resolved_services)
         try:
             yield
         finally:
+            app.state.collab_stop_event.set()
+            app.state.collab_cleanup_task.cancel()
+            try:
+                await app.state.collab_cleanup_task
+            except asyncio.CancelledError:
+                pass
             resolved_services.monitor.stop()
 
     app = FastAPI(
@@ -97,10 +110,10 @@ def create_app(
         app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
     app.mount("/switch-screenshots", StaticFiles(directory=str(resolved_config.switch_screenshot_dir)), name="switch-screenshots")
 
-    def is_authenticated(request: Request) -> bool:
+    def is_authenticated(connection: Request | WebSocket) -> bool:
         if not resolved_config.app_password:
             return True
-        cookie_value = request.cookies.get(resolved_config.app_auth_cookie_name)
+        cookie_value = connection.cookies.get(resolved_config.app_auth_cookie_name)
         if not cookie_value:
             return False
         return hmac.compare_digest(cookie_value, resolved_config.app_auth_cookie_value)
@@ -109,12 +122,49 @@ def create_app(
         if not is_authenticated(request):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
+    def resolve_client_ip(connection: Request | WebSocket) -> str:
+        default_ip = connection.client.host if connection.client else "unknown"
+        if not resolved_config.trust_proxy_headers:
+            return default_ip
+
+        cf_connecting_ip = connection.headers.get("cf-connecting-ip")
+        if cf_connecting_ip:
+            return cf_connecting_ip.strip()
+
+        forwarded = connection.headers.get("forwarded")
+        if forwarded:
+            first_entry = forwarded.split(",", 1)[0]
+            for segment in first_entry.split(";"):
+                key, _, value = segment.strip().partition("=")
+                if key.lower() != "for" or not value:
+                    continue
+                normalized = value.strip().strip('"')
+                if normalized.startswith("[") and "]" in normalized:
+                    normalized = normalized[1 : normalized.index("]")]
+                elif ":" in normalized and normalized.count(":") == 1:
+                    normalized = normalized.split(":", 1)[0]
+                return normalized
+
+        x_forwarded_for = connection.headers.get("x-forwarded-for")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",", 1)[0].strip()
+
+        x_real_ip = connection.headers.get("x-real-ip")
+        if x_real_ip:
+            return x_real_ip.strip()
+
+        return default_ip
+
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
         return TEMPLATES.TemplateResponse(
             request=request,
             name="index.html",
-            context={"title": "Android SMS Dashboard"},
+            context={
+                "title": "Android SMS Dashboard",
+                "collab_ping_interval_ms": int(resolved_config.collab_ping_interval_seconds * 1000),
+                "collab_cursor_throttle_ms": resolved_config.collab_cursor_throttle_ms,
+            },
         )
 
     @app.post("/api/auth/login", response_model=AuthStatusResponse)
@@ -309,6 +359,51 @@ def create_app(
         require_auth(request)
         runtime = get_services(request)
         return await run_blocking(runtime.monitor.get_status)
+
+    @app.websocket("/api/collab/ws")
+    async def collab_ws(websocket: WebSocket) -> None:
+        if not is_authenticated(websocket):
+            await websocket.close(code=4401, reason="Authentication required")
+            return
+
+        await websocket.accept()
+        runtime = websocket.app.state.services
+        participant_id: str | None = None
+        try:
+            join_message = await websocket.receive_json()
+            if join_message.get("type") != "join":
+                await websocket.close(code=4400, reason="First message must be join")
+                return
+
+            name = str(join_message.get("name", "")).strip()
+            if not name:
+                await websocket.close(code=4400, reason="Participant name is required")
+                return
+
+            snapshot = await runtime.collab_service.join(websocket, name, resolve_client_ip(websocket))
+            participant_id = snapshot["self_id"]
+            await websocket.send_json(snapshot)
+
+            while True:
+                message = await websocket.receive_json()
+                message_type = message.get("type")
+                if message_type == "ping":
+                    await runtime.collab_service.heartbeat(participant_id)
+                    continue
+                if message_type == "cursor":
+                    await runtime.collab_service.update_cursor(
+                        participant_id,
+                        message.get("x_ratio"),
+                        message.get("y_ratio"),
+                    )
+                    continue
+                await websocket.close(code=4400, reason="Unsupported message type")
+                return
+        except WebSocketDisconnect:
+            pass
+        finally:
+            if participant_id:
+                await runtime.collab_service.disconnect(participant_id)
 
     return app
 
