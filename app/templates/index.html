@@ -31,24 +31,30 @@
             font-family: "Avenir Next", "PingFang SC", sans-serif;
             color: var(--text);
             background:
-                radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 28%),
-                radial-gradient(circle at top right, rgba(245, 158, 11, 0.16), transparent 24%),
-                linear-gradient(160deg, #f6f0e5 0%, #edf7f5 100%);
+                radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 26%),
+                radial-gradient(circle at 85% 12%, rgba(245, 158, 11, 0.12), transparent 22%),
+                linear-gradient(160deg, #f7f1e7 0%, #eef6f3 100%);
         }
 
         .page {
-            max-width: 1180px;
+            max-width: 1320px;
             margin: 0 auto;
-            padding: 32px 20px 48px;
+            padding: 26px 20px 52px;
         }
 
         .hero {
             display: flex;
             flex-wrap: wrap;
             justify-content: space-between;
-            gap: 20px;
-            align-items: center;
-            margin-bottom: 24px;
+            gap: 24px;
+            align-items: flex-start;
+            margin-bottom: 22px;
+            padding: 22px 24px;
+            background: rgba(255, 253, 249, 0.72);
+            border: 1px solid rgba(15, 118, 110, 0.12);
+            border-radius: 30px;
+            box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08);
+            backdrop-filter: blur(18px);
         }
 
         .hero h1 {
@@ -61,14 +67,17 @@
         .hero p {
             margin: 8px 0 0;
             color: var(--muted);
-            max-width: 680px;
+            max-width: 760px;
             font-size: 1rem;
+            line-height: 1.6;
         }
 
         .actions {
             display: flex;
             gap: 12px;
             flex-wrap: wrap;
+            justify-content: flex-end;
+            align-self: center;
         }
 
         button {
@@ -109,36 +118,52 @@
         .grid {
             display: grid;
             grid-template-columns: repeat(12, 1fr);
-            gap: 18px;
+            gap: 16px;
         }
 
         .card {
             grid-column: span 12;
             background: var(--panel);
             border: 1px solid var(--border);
-            border-radius: 24px;
+            border-radius: 28px;
             box-shadow: var(--shadow);
-            padding: 22px;
+            padding: 20px;
             backdrop-filter: blur(18px);
         }
 
         .card h2 {
-            margin: 0 0 16px;
+            margin: 0 0 14px;
             font-size: 1.1rem;
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 14px;
+        }
+
+        .card-top p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 0.92rem;
+            line-height: 1.5;
         }
 
         .stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 14px;
-            margin-bottom: 18px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
         }
 
         .stat {
             background: var(--panel-strong);
             border-radius: 18px;
-            padding: 16px;
+            padding: 14px 16px;
             border: 1px solid rgba(15, 118, 110, 0.12);
+            min-height: 118px;
         }
 
         .stat label {
@@ -151,6 +176,12 @@
         .stat strong {
             font-size: 1.8rem;
             line-height: 1;
+        }
+
+        .stat strong.compact {
+            font-size: 1.12rem;
+            line-height: 1.35;
+            word-break: break-word;
         }
 
         .pill {
@@ -200,9 +231,38 @@
             font-size: 0.9rem;
         }
 
+        .meta-block {
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: rgba(255, 253, 249, 0.86);
+            border: 1px solid rgba(15, 118, 110, 0.1);
+            line-height: 1.6;
+        }
+
+        .meta-stack {
+            display: grid;
+            gap: 12px;
+        }
+
         .sms-body {
             white-space: pre-wrap;
             max-width: 420px;
+        }
+
+        .table-shell {
+            border-radius: 22px;
+            overflow: hidden;
+            background: rgba(255, 253, 249, 0.84);
+            border: 1px solid rgba(15, 118, 110, 0.1);
+        }
+
+        .table-scroll {
+            max-height: 280px;
+            overflow: auto;
+        }
+
+        .table-scroll table {
+            margin: 0;
         }
 
         .toolbar {
@@ -330,6 +390,9 @@
         .log-list {
             display: grid;
             gap: 12px;
+            max-height: 460px;
+            overflow: auto;
+            padding-right: 4px;
         }
 
         .log-item {
@@ -426,6 +489,103 @@
             color: var(--danger);
             font-size: 0.92rem;
             margin-top: 12px;
+        }
+
+        .name-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(246, 240, 229, 0.86);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1190;
+            padding: 20px;
+        }
+
+        .name-overlay.active {
+            display: flex;
+        }
+
+        .name-card {
+            width: min(420px, 100%);
+            background: rgba(255, 253, 249, 0.98);
+            border-radius: 28px;
+            border: 1px solid rgba(15, 118, 110, 0.16);
+            box-shadow: 0 30px 80px rgba(15, 23, 42, 0.14);
+            padding: 28px;
+        }
+
+        .name-card h2 {
+            margin: 0 0 10px;
+            font-size: 1.4rem;
+        }
+
+        .name-card p {
+            margin: 0 0 18px;
+            color: var(--muted);
+        }
+
+        .name-card input {
+            width: 100%;
+            border: 1px solid rgba(15, 118, 110, 0.22);
+            border-radius: 18px;
+            padding: 14px 16px;
+            font-size: 1rem;
+            margin-bottom: 14px;
+            background: white;
+        }
+
+        .name-error {
+            min-height: 22px;
+            color: var(--danger);
+            font-size: 0.92rem;
+            margin-top: 12px;
+        }
+
+        .cursor-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1100;
+            overflow: hidden;
+        }
+
+        .remote-cursor {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid white;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
+        }
+
+        .remote-cursor::after {
+            content: "";
+            position: absolute;
+            top: 10px;
+            left: 9px;
+            width: 2px;
+            height: 18px;
+            background: currentColor;
+            transform: rotate(-35deg);
+            transform-origin: top left;
+            border-radius: 999px;
+        }
+
+        .remote-cursor-label {
+            position: absolute;
+            left: 14px;
+            top: -8px;
+            transform: translateY(-100%);
+            background: rgba(15, 23, 42, 0.88);
+            color: white;
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 0.76rem;
+            white-space: nowrap;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
         }
 
         .overlay-card {
@@ -570,8 +730,16 @@
         }
 
         @media (min-width: 900px) {
+            .span-4 {
+                grid-column: span 4;
+            }
+
             .span-5 {
                 grid-column: span 5;
+            }
+
+            .span-8 {
+                grid-column: span 8;
             }
 
             .span-7 {
@@ -582,6 +750,14 @@
         @media (max-width: 900px) {
             .switch-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .hero {
+                padding: 20px;
+            }
+
+            .actions {
+                justify-content: flex-start;
             }
         }
 
@@ -606,8 +782,55 @@
         </section>
 
         <section class="grid">
-            <article class="card span-5">
-                <h2>服务状态</h2>
+            <article class="card span-4">
+                <div class="card-top">
+                    <div>
+                        <h2>在线协作</h2>
+                        <p>多人同时打开页面时，这里会显示在线成员和远程鼠标协作状态。</p>
+                    </div>
+                    <div id="collab-pill" class="pill bad">协作未连接</div>
+                </div>
+                <div class="stats">
+                    <div class="stat">
+                        <label>在线人数</label>
+                        <strong id="collab-online-count">0</strong>
+                    </div>
+                    <div class="stat">
+                        <label>我的名字</label>
+                        <strong id="collab-self-name" class="compact">-</strong>
+                    </div>
+                    <div class="stat">
+                        <label>我的 IP</label>
+                        <strong id="collab-self-ip" class="compact">-</strong>
+                    </div>
+                </div>
+                <div class="meta-stack">
+                    <div class="meta-block" id="collab-detail">登录后会自动加入在线协作并显示其他浏览器的鼠标位置。</div>
+                    <div class="table-shell">
+                        <div class="table-scroll">
+                            <table class="online-table">
+                                <thead>
+                                    <tr>
+                                        <th>名字</th>
+                                        <th>真实 IP</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="online-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card span-4">
+                <div class="card-top">
+                    <div>
+                        <h2>服务状态</h2>
+                        <p>这里聚合 ADB、监听线程和最近一次短信监听命中的运行信息。</p>
+                    </div>
+                    <div id="health-pill" class="pill">加载中</div>
+                </div>
                 <div class="stats">
                     <div class="stat">
                         <label>ADB 可用</label>
@@ -627,42 +850,13 @@
                         <span id="monitor-last-hit-source">Buffer: -</span>
                     </div>
                 </div>
-                <div id="health-pill" class="pill">加载中</div>
-                <p class="meta" id="health-detail"></p>
-                <p class="meta" id="monitor-log-hit-summary">最近命中的短信日志摘要：-</p>
-            </article>
-
-            <article class="card span-7">
-                <h2>eSIM 状态</h2>
-                <div class="stats">
-                    <div class="stat">
-                        <label>总 eSIM 数</label>
-                        <strong id="esim-total">0</strong>
-                    </div>
-                    <div class="stat">
-                        <label>当前激活 eSIM 数</label>
-                        <strong id="esim-active">0</strong>
-                    </div>
-                    <div class="stat">
-                        <label>最近同步</label>
-                        <strong id="esim-sync-at" style="font-size: 1rem;">-</strong>
-                    </div>
+                <div class="meta-stack">
+                    <div class="meta-block" id="health-detail"></div>
+                    <div class="meta-block" id="monitor-log-hit-summary">最近命中的短信日志摘要：-</div>
                 </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Sub ID</th>
-                            <th>名称</th>
-                            <th>运营商</th>
-                            <th>状态</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="esim-table-body"></tbody>
-                </table>
             </article>
 
-            <article class="card">
+            <article class="card span-4">
                 <div class="lock-card-top">
                     <div>
                         <h2 style="margin-bottom: 6px;">切换锁定与日志</h2>
@@ -693,6 +887,40 @@
                 </div>
             </article>
 
+            <article class="card span-8">
+                <h2>eSIM 状态</h2>
+                <div class="stats">
+                    <div class="stat">
+                        <label>总 eSIM 数</label>
+                        <strong id="esim-total">0</strong>
+                    </div>
+                    <div class="stat">
+                        <label>当前激活 eSIM 数</label>
+                        <strong id="esim-active">0</strong>
+                    </div>
+                    <div class="stat">
+                        <label>最近同步</label>
+                        <strong id="esim-sync-at" style="font-size: 1rem;">-</strong>
+                    </div>
+                </div>
+                <div class="table-shell">
+                    <div class="table-scroll" style="max-height: 420px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Sub ID</th>
+                                    <th>名称</th>
+                                    <th>运营商</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="esim-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </article>
+
             <article class="card">
                 <div class="toolbar">
                     <div>
@@ -711,18 +939,22 @@
                         <div class="pill" id="monitor-pill">监听状态读取中</div>
                     </div>
                 </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>短信 ID</th>
-                            <th>号码</th>
-                            <th>eSIM 名称</th>
-                            <th>时间戳</th>
-                            <th>内容</th>
-                        </tr>
-                    </thead>
-                    <tbody id="sms-table-body"></tbody>
-                </table>
+                <div class="table-shell">
+                    <div class="table-scroll" style="max-height: 520px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>短信 ID</th>
+                                    <th>号码</th>
+                                    <th>eSIM 名称</th>
+                                    <th>时间戳</th>
+                                    <th>内容</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sms-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
                 <div class="notice" id="notice"></div>
             </article>
         </section>
@@ -783,6 +1015,18 @@
         </div>
     </div>
 
+    <div id="name-overlay" class="name-overlay" aria-live="polite" aria-modal="true">
+        <div class="name-card">
+            <h2>输入在线名字</h2>
+            <p>多人同时打开页面时，会用这个名字显示在线列表和远程鼠标标记。</p>
+            <input id="name-input" type="text" placeholder="例如：Alice" maxlength="80" autocomplete="nickname" />
+            <button id="name-submit-btn" type="button">加入协作</button>
+            <div id="name-error" class="name-error"></div>
+        </div>
+    </div>
+
+    <div id="cursor-layer" class="cursor-layer" aria-hidden="true"></div>
+
     <div id="sms-toast" class="toast"></div>
 
     <script>
@@ -807,6 +1051,21 @@
         const authPasswordInput = document.getElementById("auth-password");
         const authLoginBtn = document.getElementById("auth-login-btn");
         const authError = document.getElementById("auth-error");
+        const pageEl = document.querySelector(".page");
+        const cursorLayer = document.getElementById("cursor-layer");
+        const onlineTableBody = document.getElementById("online-table-body");
+        const collabOnlineCount = document.getElementById("collab-online-count");
+        const collabSelfName = document.getElementById("collab-self-name");
+        const collabSelfIp = document.getElementById("collab-self-ip");
+        const collabPill = document.getElementById("collab-pill");
+        const collabDetail = document.getElementById("collab-detail");
+        const nameOverlay = document.getElementById("name-overlay");
+        const nameInput = document.getElementById("name-input");
+        const nameSubmitBtn = document.getElementById("name-submit-btn");
+        const nameError = document.getElementById("name-error");
+        const collabStorageKey = "esim-switch-collab-name";
+        const collabPingIntervalMs = {{ collab_ping_interval_ms }};
+        const collabCursorThrottleMs = {{ collab_cursor_throttle_ms }};
         const smsToast = document.getElementById("sms-toast");
         const switchLockPill = document.getElementById("switch-lock-pill");
         const switchLockStatus = document.getElementById("switch-lock-status");
@@ -841,6 +1100,16 @@
         const authState = {
             authenticated: false,
         };
+        const collabState = {
+            socket: null,
+            reconnectTimer: null,
+            pingTimer: null,
+            selfId: null,
+            selfName: localStorage.getItem(collabStorageKey) || "",
+            participants: new Map(),
+            isConnecting: false,
+            lastCursorSentAt: 0,
+        };
 
         async function fetchJson(url, options = {}) {
             const response = await fetch(url, options);
@@ -869,7 +1138,9 @@
             authPasswordInput.value = "";
             disconnectSwitchEventStream();
             disconnectSmsEventStream();
+            disconnectCollab();
             clearSwitchLockTimer();
+            hideNameOverlay();
             closeSwitchOverlayForce();
             closeSwitchConfirmOverlay();
         }
@@ -894,6 +1165,18 @@
             smsEventState.toastTimer = setTimeout(() => {
                 smsToast.classList.remove("active");
             }, 3500);
+        }
+
+        function showNameOverlay(message = "") {
+            nameOverlay.classList.add("active");
+            nameInput.value = collabState.selfName;
+            nameError.textContent = message;
+            setTimeout(() => nameInput.focus(), 0);
+        }
+
+        function hideNameOverlay() {
+            nameOverlay.classList.remove("active");
+            nameError.textContent = "";
         }
 
         function setNotice(message, isError = false) {
@@ -948,6 +1231,64 @@
             document.getElementById("monitor-last-hit-at").textContent = "-";
             document.getElementById("monitor-last-hit-source").textContent = "Buffer: -";
             document.getElementById("monitor-log-hit-summary").textContent = `最近命中的短信日志摘要：${message}`;
+        }
+
+        function hashHue(value) {
+            let hash = 0;
+            for (const char of value) {
+                hash = ((hash << 5) - hash) + char.charCodeAt(0);
+                hash |= 0;
+            }
+            return Math.abs(hash) % 360;
+        }
+
+        function renderCollab() {
+            const participants = [...collabState.participants.values()];
+            collabOnlineCount.textContent = String(participants.length);
+            const selfParticipant = collabState.selfId ? collabState.participants.get(collabState.selfId) : null;
+            collabSelfName.textContent = selfParticipant?.name || collabState.selfName || "-";
+            collabSelfIp.textContent = selfParticipant?.ip || "-";
+            collabPill.className = collabState.socket ? "pill" : "pill bad";
+            collabPill.textContent = collabState.socket ? "协作已连接" : "协作未连接";
+            collabDetail.textContent = participants.length > 1
+                ? `当前共有 ${participants.length} 个页面在线，可以看到其他人的鼠标位置。`
+                : "登录后会自动加入在线协作并显示其他浏览器的鼠标位置。";
+
+            onlineTableBody.innerHTML = "";
+            if (!participants.length) {
+                onlineTableBody.innerHTML = '<tr><td colspan="3" class="meta">暂无在线参与者</td></tr>';
+            } else {
+                for (const participant of participants) {
+                    const row = document.createElement("tr");
+                    const isSelf = participant.id === collabState.selfId;
+                    row.innerHTML = `
+                        <td>${participant.name}</td>
+                        <td>${participant.ip}</td>
+                        <td class="${isSelf ? "status-self" : "status-online"}">${isSelf ? "自己" : "在线"}</td>
+                    `;
+                    onlineTableBody.appendChild(row);
+                }
+            }
+
+            cursorLayer.innerHTML = "";
+            const pageRect = pageEl.getBoundingClientRect();
+            for (const participant of participants) {
+                if (participant.id === collabState.selfId || !participant.cursor) {
+                    continue;
+                }
+                const cursor = document.createElement("div");
+                const hue = hashHue(participant.id);
+                cursor.className = "remote-cursor";
+                cursor.style.color = `hsl(${hue} 65% 42%)`;
+                cursor.style.background = `hsl(${hue} 82% 58%)`;
+                cursor.style.left = `${participant.cursor.x_ratio * pageRect.width}px`;
+                cursor.style.top = `${participant.cursor.y_ratio * pageRect.height}px`;
+                const label = document.createElement("div");
+                label.className = "remote-cursor-label";
+                label.textContent = participant.name;
+                cursor.appendChild(label);
+                cursorLayer.appendChild(cursor);
+            }
         }
 
         function renderEsim(data) {
@@ -1462,6 +1803,140 @@
             }, smsEventState.reconnectDelayMs);
         }
 
+        function clearCollabReconnect() {
+            if (collabState.reconnectTimer) {
+                clearTimeout(collabState.reconnectTimer);
+                collabState.reconnectTimer = null;
+            }
+        }
+
+        function clearCollabPing() {
+            if (collabState.pingTimer) {
+                clearInterval(collabState.pingTimer);
+                collabState.pingTimer = null;
+            }
+        }
+
+        function disconnectCollab() {
+            clearCollabReconnect();
+            clearCollabPing();
+            if (collabState.socket) {
+                collabState.socket.onclose = null;
+                collabState.socket.close();
+                collabState.socket = null;
+            }
+            collabState.isConnecting = false;
+            collabState.selfId = null;
+            collabState.participants.clear();
+            renderCollab();
+        }
+
+        function scheduleCollabReconnect() {
+            if (!authState.authenticated || !collabState.selfName || collabState.reconnectTimer) {
+                return;
+            }
+            collabState.reconnectTimer = setTimeout(() => {
+                collabState.reconnectTimer = null;
+                ensureCollabConnection();
+            }, 2000);
+        }
+
+        function ensureCollabIdentity() {
+            collabState.selfName = (localStorage.getItem(collabStorageKey) || "").trim();
+            if (!collabState.selfName) {
+                showNameOverlay();
+                return false;
+            }
+            hideNameOverlay();
+            return true;
+        }
+
+        function startCollabPing() {
+            clearCollabPing();
+            collabState.pingTimer = setInterval(() => {
+                if (collabState.socket && collabState.socket.readyState === WebSocket.OPEN) {
+                    collabState.socket.send(JSON.stringify({ type: "ping" }));
+                }
+            }, collabPingIntervalMs);
+        }
+
+        function applyCollabParticipants(participants, selfId = collabState.selfId) {
+            collabState.selfId = selfId;
+            collabState.participants = new Map(participants.map((participant) => [participant.id, participant]));
+            renderCollab();
+        }
+
+        function ensureCollabConnection() {
+            if (!authState.authenticated || !ensureCollabIdentity() || collabState.socket || collabState.isConnecting) {
+                return;
+            }
+            collabState.isConnecting = true;
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const socket = new WebSocket(`${protocol}//${window.location.host}/api/collab/ws`);
+            collabState.socket = socket;
+            renderCollab();
+
+            socket.onopen = () => {
+                collabState.isConnecting = false;
+                socket.send(JSON.stringify({ type: "join", name: collabState.selfName }));
+                startCollabPing();
+            };
+            socket.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                if (message.type === "snapshot" || message.type === "presence") {
+                    applyCollabParticipants(message.participants || [], message.self_id || collabState.selfId);
+                    return;
+                }
+                if (message.type === "cursor" && message.participant) {
+                    collabState.participants.set(message.participant.id, message.participant);
+                    renderCollab();
+                    return;
+                }
+                if (message.type === "remove") {
+                    collabState.participants.delete(message.participant_id);
+                    renderCollab();
+                }
+            };
+            socket.onclose = () => {
+                clearCollabPing();
+                if (collabState.socket === socket) {
+                    collabState.socket = null;
+                }
+                collabState.isConnecting = false;
+                collabState.selfId = null;
+                renderCollab();
+                scheduleCollabReconnect();
+            };
+            socket.onerror = () => {
+                socket.close();
+            };
+        }
+
+        function maybeSendCursor(event) {
+            if (document.hidden || !collabState.socket || collabState.socket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+            const now = Date.now();
+            if (now - collabState.lastCursorSentAt < collabCursorThrottleMs) {
+                return;
+            }
+            const rect = pageEl.getBoundingClientRect();
+            if (!rect.width || !rect.height) {
+                return;
+            }
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+                return;
+            }
+            collabState.lastCursorSentAt = now;
+            collabState.socket.send(JSON.stringify({
+                type: "cursor",
+                x_ratio: Math.max(0, Math.min(1, x / rect.width)),
+                y_ratio: Math.max(0, Math.min(1, y / rect.height)),
+            }));
+        }
+
         function ensureSwitchEventStream() {
             if (switchState.eventSource || !authState.authenticated) {
                 return;
@@ -1634,6 +2109,7 @@
                     hideAuthOverlay();
                     ensureSwitchEventStream();
                     ensureSmsEventStream();
+                    ensureCollabConnection();
                     await loadDashboard();
                 }
             } catch (error) {
@@ -1649,6 +2125,32 @@
             }
         });
 
+        nameSubmitBtn.addEventListener("click", () => {
+            const name = nameInput.value.trim();
+            if (!name) {
+                nameError.textContent = "请输入在线名字";
+                return;
+            }
+            localStorage.setItem(collabStorageKey, name);
+            collabState.selfName = name;
+            hideNameOverlay();
+            ensureCollabConnection();
+        });
+
+        nameInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                nameSubmitBtn.click();
+            }
+        });
+
+        pageEl.addEventListener("mousemove", maybeSendCursor);
+        window.addEventListener("resize", renderCollab);
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) {
+                renderCollab();
+            }
+        });
+
         (async () => {
             try {
                 const status = await fetchJson("/api/auth/status");
@@ -1659,6 +2161,7 @@
                 hideAuthOverlay();
                 ensureSwitchEventStream();
                 ensureSmsEventStream();
+                ensureCollabConnection();
                 await loadDashboard();
             } catch (_) {
                 showAuthOverlay();

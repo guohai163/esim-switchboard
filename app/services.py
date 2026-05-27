@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.adb import AdbClient, parse_isub_output, parse_sms_query_output
+from app.collab import CollabSessionService
 from app.config import AppConfig
 from app.db import Database
 from app.models import SyncResponse
@@ -125,3 +126,4 @@ class AppServices:
     monitor: Any
     switch_service: Any
     sms_event_service: Any
+    collab_service: CollabSessionService
