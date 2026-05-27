@@ -76,6 +76,19 @@ class SmsListResponse(BaseModel):
     items: list[SmsMessageOut]
 
 
+class SmsEventStatusResponse(BaseModel):
+    event_type: str | None = None
+    occurred_at: str | None = None
+    inserted_count: int = 0
+    fetched_count: int = 0
+    latest_sms_id: str | None = None
+    latest_address: str | None = None
+    latest_display_name: str | None = None
+    event_source: str | None = None
+    trigger_buffer: str | None = None
+    trigger_log_line: str | None = None
+
+
 class SyncResponse(BaseModel):
     ok: bool = True
     fetched_count: int = 0
@@ -95,6 +108,16 @@ class AuthStatusResponse(BaseModel):
 
 class EsimSwitchRequest(BaseModel):
     display_name: str
+    lock_minutes: Literal[10, 20, 30]
+
+
+class EsimSwitchLogEntryOut(BaseModel):
+    event_type: Literal["attempt_started", "blocked_running", "blocked_locked", "succeeded", "failed"]
+    display_name: str | None = None
+    lock_minutes: int | None = None
+    created_at: str
+    message: str
+    task_id: str | None = None
 
 
 class EsimSwitchStepOut(BaseModel):
@@ -115,6 +138,11 @@ class EsimSwitchStatusResponse(BaseModel):
     current_step: str | None = None
     latest_screenshot_url: str | None = None
     error: str | None = None
+    lock_active: bool = False
+    lock_until: str | None = None
+    lock_remaining_seconds: int = 0
+    lock_minutes: int | None = None
+    logs: list[EsimSwitchLogEntryOut] = Field(default_factory=list)
     steps: list[EsimSwitchStepOut] = Field(default_factory=list)
 
 
@@ -125,6 +153,11 @@ class MonitorStatusResponse(BaseModel):
     last_event_at: str | None = None
     last_error: str | None = None
     last_log_line: str | None = None
+    active_log_buffers: list[str] = Field(default_factory=list)
+    last_sms_log_hit_at: str | None = None
+    last_sms_log_hit_line: str | None = None
+    last_sms_log_hit_buffer: str | None = None
+    last_broadcast_source: str | None = None
 
 
 class HealthResponse(BaseModel):

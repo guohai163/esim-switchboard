@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import base64
-import contextlib
+import math
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -14,11 +14,17 @@ import uiautomator2 as u2
 
 from app.adb import parse_isub_output
 from app.config import AppConfig
+from app.db import Database
 from app.services import EsimSyncService, utc_now_iso
 
 
 SwitchTaskStatus = Literal["idle", "running", "succeeded", "failed"]
 SwitchStepStatus = Literal["pending", "running", "succeeded", "failed"]
+SwitchLogEventType = Literal["attempt_started", "blocked_running", "blocked_locked", "succeeded", "failed"]
+
+LOCK_STATE_KEY = "esim_switch_lock"
+LOG_STATE_KEY = "esim_switch_logs"
+MAX_LOG_ENTRIES = 30
 
 
 @dataclass(slots=True)
@@ -32,10 +38,29 @@ class SwitchStep:
 
 
 @dataclass(slots=True)
+class SwitchLogEntry:
+    event_type: SwitchLogEventType
+    display_name: str | None
+    lock_minutes: int | None
+    created_at: str
+    message: str
+    task_id: str | None = None
+
+
+@dataclass(slots=True)
+class SwitchLockState:
+    lock_until: str
+    lock_minutes: int
+    last_target_display_name: str | None
+    locked_at: str
+
+
+@dataclass(slots=True)
 class SwitchTask:
     task_id: str | None = None
     status: SwitchTaskStatus = "idle"
     target_display_name: str | None = None
+    requested_lock_minutes: int | None = None
     started_at: str | None = None
     finished_at: str | None = None
     current_step: str | None = None
@@ -48,19 +73,45 @@ class EsimSwitchConflictError(RuntimeError):
     """Raised when a switch task is already running."""
 
 
+class EsimSwitchLockedError(RuntimeError):
+    """Raised when a switch is blocked by the post-switch lock window."""
+
+
 class EsimSwitchService:
     """Runs the eSIM switching flow and streams step snapshots to the UI."""
 
-    def __init__(self, config: AppConfig, esim_service: EsimSyncService) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        db: Database | EsimSyncService,
+        esim_service: EsimSyncService | None = None,
+    ) -> None:
         self.config = config
-        self.esim_service = esim_service
+        if esim_service is None:
+            self.db = Database(config.db_path)
+            self.db.init_schema()
+            self.esim_service = db  # type: ignore[assignment]
+        else:
+            self.db = db  # type: ignore[assignment]
+            self.esim_service = esim_service
         self._lock = threading.Lock()
         self._task = SwitchTask()
+        self._lock_state: SwitchLockState | None = None
+        self._logs: list[SwitchLogEntry] = []
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._active_thread: threading.Thread | None = None
 
+    def restore_state(self) -> None:
+        with self._lock:
+            raw_lock = self.db.get_app_state_json(LOCK_STATE_KEY)
+            raw_logs = self.db.get_app_state_json(LOG_STATE_KEY)
+            self._lock_state = self._deserialize_lock_state(raw_lock)
+            self._logs = self._deserialize_logs(raw_logs)
+            self._refresh_lock_locked()
+
     def get_status(self) -> dict[str, Any]:
         with self._lock:
+            self._refresh_lock_locked()
             return self._serialize_task(self._task)
 
     async def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
@@ -74,21 +125,53 @@ class EsimSwitchService:
         with self._lock:
             self._subscribers.discard(queue)
 
-    def start_switch(self, display_name: str) -> dict[str, Any]:
+    def start_switch(self, display_name: str, lock_minutes: int) -> dict[str, Any]:
         with self._lock:
             if self._task.status == "running":
-                raise EsimSwitchConflictError("An eSIM switch task is already running")
+                message = "An eSIM switch task is already running"
+                self._append_log_locked("blocked_running", display_name, lock_minutes, message, self._task.task_id)
+                snapshot = self._serialize_task(self._task)
+                self._notify_locked("snapshot", snapshot)
+                raise EsimSwitchConflictError(message)
+
+            self._refresh_lock_locked()
+            if self._lock_state:
+                remaining_seconds = self._remaining_seconds(self._lock_state.lock_until)
+                remaining_minutes = max(1, math.ceil(remaining_seconds / 60))
+                unlock_at = self._format_lock_until(self._lock_state.lock_until)
+                message = f"当前处于切换锁定期，需等待到 {unlock_at} 后再试，剩余约 {remaining_minutes} 分钟"
+                self._append_log_locked("blocked_locked", display_name, lock_minutes, message, None)
+                snapshot = self._serialize_task(self._task)
+                self._notify_locked("snapshot", snapshot)
+                raise EsimSwitchLockedError(message)
+
             task_id = uuid.uuid4().hex
+            started_at = utc_now_iso()
+            self._append_log_locked(
+                "attempt_started",
+                display_name,
+                lock_minutes,
+                f"发起切换到 {display_name}，成功后将锁定 {lock_minutes} 分钟",
+                task_id,
+                created_at=started_at,
+            )
             self._task = SwitchTask(
                 task_id=task_id,
                 status="running",
                 target_display_name=display_name,
-                started_at=utc_now_iso(),
+                requested_lock_minutes=lock_minutes,
+                started_at=started_at,
                 current_step="starting",
                 steps=[],
             )
             self._notify_locked("task_started", self._serialize_task(self._task))
-        thread = threading.Thread(target=self._run_switch_flow, args=(task_id, display_name), daemon=True, name=f"esim-switch-{task_id[:8]}")
+
+        thread = threading.Thread(
+            target=self._run_switch_flow,
+            args=(task_id, display_name),
+            daemon=True,
+            name=f"esim-switch-{task_id[:8]}",
+        )
         self._active_thread = thread
         thread.start()
         return self.get_status()
@@ -202,11 +285,42 @@ class EsimSwitchService:
 
     def _finish_task(self, status: SwitchTaskStatus, error: str | None) -> None:
         with self._lock:
+            finished_at = utc_now_iso()
             self._task.status = status
-            self._task.finished_at = utc_now_iso()
+            self._task.finished_at = finished_at
             self._task.error = error
             self._task.current_step = self._task.steps[-1].title if self._task.steps else self._task.current_step
-            event_name = "task_succeeded" if status == "succeeded" else "task_failed"
+
+            if status == "succeeded":
+                lock_minutes = self._task.requested_lock_minutes or 10
+                lock_until = self._iso_after_minutes(lock_minutes, finished_at)
+                self._lock_state = SwitchLockState(
+                    lock_until=lock_until,
+                    lock_minutes=lock_minutes,
+                    last_target_display_name=self._task.target_display_name,
+                    locked_at=finished_at,
+                )
+                self._persist_lock_locked()
+                self._append_log_locked(
+                    "succeeded",
+                    self._task.target_display_name,
+                    lock_minutes,
+                    f"已切换到 {self._task.target_display_name}，锁定至 {self._format_lock_until(lock_until)}",
+                    self._task.task_id,
+                    created_at=finished_at,
+                )
+                event_name = "task_succeeded"
+            else:
+                self._append_log_locked(
+                    "failed",
+                    self._task.target_display_name,
+                    self._task.requested_lock_minutes,
+                    f"切换到 {self._task.target_display_name} 失败：{error or '未知错误'}",
+                    self._task.task_id,
+                    created_at=finished_at,
+                )
+                event_name = "task_failed"
+
             self._notify_locked(event_name, self._serialize_task(self._task))
 
     def _capture_step(
@@ -220,7 +334,8 @@ class EsimSwitchService:
         device: Any,
     ) -> None:
         timestamp = utc_now_iso()
-        filename = f"{len(self._task.steps) + 1:02d}_{step_key}.png"
+        with self._lock:
+            filename = f"{len(self._task.steps) + 1:02d}_{step_key}.png"
         file_path = task_dir / filename
         image = device.screenshot(format="pillow")
         image.save(file_path)
@@ -310,6 +425,8 @@ class EsimSwitchService:
         return f"等待 {self.config.switch_confirm_wait_seconds:.0f} 秒后截图确认，暂未从快照识别到激活 eSIM"
 
     def _serialize_task(self, task: SwitchTask) -> dict[str, Any]:
+        self._refresh_lock_locked()
+        lock_active = self._lock_state is not None
         return {
             "task_id": task.task_id,
             "status": task.status,
@@ -319,6 +436,21 @@ class EsimSwitchService:
             "current_step": task.current_step,
             "latest_screenshot_url": task.latest_screenshot_url,
             "error": task.error,
+            "lock_active": lock_active,
+            "lock_until": self._lock_state.lock_until if self._lock_state else None,
+            "lock_remaining_seconds": self._remaining_seconds(self._lock_state.lock_until) if self._lock_state else 0,
+            "lock_minutes": self._lock_state.lock_minutes if self._lock_state else None,
+            "logs": [
+                {
+                    "event_type": entry.event_type,
+                    "display_name": entry.display_name,
+                    "lock_minutes": entry.lock_minutes,
+                    "created_at": entry.created_at,
+                    "message": entry.message,
+                    "task_id": entry.task_id,
+                }
+                for entry in self._logs
+            ],
             "steps": [
                 {
                     "step_key": step.step_key,
@@ -331,6 +463,127 @@ class EsimSwitchService:
                 for step in task.steps
             ],
         }
+
+    def _append_log_locked(
+        self,
+        event_type: SwitchLogEventType,
+        display_name: str | None,
+        lock_minutes: int | None,
+        message: str,
+        task_id: str | None,
+        *,
+        created_at: str | None = None,
+    ) -> None:
+        entry = SwitchLogEntry(
+            event_type=event_type,
+            display_name=display_name,
+            lock_minutes=lock_minutes,
+            created_at=created_at or utc_now_iso(),
+            message=message,
+            task_id=task_id,
+        )
+        self._logs.insert(0, entry)
+        self._logs = self._logs[:MAX_LOG_ENTRIES]
+        self._persist_logs_locked()
+
+    def _persist_lock_locked(self) -> None:
+        if self._lock_state is None:
+            self.db.set_app_state(LOCK_STATE_KEY, None, utc_now_iso())
+            return
+        self.db.set_app_state(
+            LOCK_STATE_KEY,
+            {
+                "lock_until": self._lock_state.lock_until,
+                "lock_minutes": self._lock_state.lock_minutes,
+                "last_target_display_name": self._lock_state.last_target_display_name,
+                "locked_at": self._lock_state.locked_at,
+            },
+            self._lock_state.locked_at,
+        )
+
+    def _persist_logs_locked(self) -> None:
+        updated_at = self._logs[0].created_at if self._logs else utc_now_iso()
+        self.db.set_app_state(
+            LOG_STATE_KEY,
+            [
+                {
+                    "event_type": entry.event_type,
+                    "display_name": entry.display_name,
+                    "lock_minutes": entry.lock_minutes,
+                    "created_at": entry.created_at,
+                    "message": entry.message,
+                    "task_id": entry.task_id,
+                }
+                for entry in self._logs
+            ],
+            updated_at,
+        )
+
+    def _deserialize_lock_state(self, raw_value: Any) -> SwitchLockState | None:
+        if not isinstance(raw_value, dict):
+            return None
+        lock_until = raw_value.get("lock_until")
+        lock_minutes = raw_value.get("lock_minutes")
+        locked_at = raw_value.get("locked_at")
+        if not isinstance(lock_until, str) or not isinstance(lock_minutes, int) or not isinstance(locked_at, str):
+            return None
+        return SwitchLockState(
+            lock_until=lock_until,
+            lock_minutes=lock_minutes,
+            last_target_display_name=raw_value.get("last_target_display_name"),
+            locked_at=locked_at,
+        )
+
+    def _deserialize_logs(self, raw_value: Any) -> list[SwitchLogEntry]:
+        if not isinstance(raw_value, list):
+            return []
+        logs: list[SwitchLogEntry] = []
+        for item in raw_value[:MAX_LOG_ENTRIES]:
+            if not isinstance(item, dict):
+                continue
+            event_type = item.get("event_type")
+            created_at = item.get("created_at")
+            message = item.get("message")
+            if event_type not in {"attempt_started", "blocked_running", "blocked_locked", "succeeded", "failed"}:
+                continue
+            if not isinstance(created_at, str) or not isinstance(message, str):
+                continue
+            lock_minutes = item.get("lock_minutes")
+            logs.append(
+                SwitchLogEntry(
+                    event_type=event_type,
+                    display_name=item.get("display_name"),
+                    lock_minutes=lock_minutes if isinstance(lock_minutes, int) else None,
+                    created_at=created_at,
+                    message=message,
+                    task_id=item.get("task_id"),
+                )
+            )
+        return logs
+
+    def _refresh_lock_locked(self) -> None:
+        if self._lock_state is None:
+            return
+        if self._remaining_seconds(self._lock_state.lock_until) > 0:
+            return
+        self._lock_state = None
+        self._persist_lock_locked()
+
+    def _remaining_seconds(self, lock_until: str) -> int:
+        lock_until_dt = self._parse_iso(lock_until)
+        remaining = int((lock_until_dt - datetime.now(timezone.utc)).total_seconds())
+        return max(0, remaining)
+
+    def _iso_after_minutes(self, minutes: int, start_at: str) -> str:
+        base = self._parse_iso(start_at)
+        return (base + timedelta(minutes=minutes)).isoformat()
+
+    def _parse_iso(self, value: str) -> datetime:
+        return datetime.fromisoformat(value)
+
+    def _format_lock_until(self, value: str) -> str:
+        dt = self._parse_iso(value).astimezone()
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     def _notify_locked(self, event: str, data: dict[str, Any]) -> None:
         dead_queues: list[asyncio.Queue[dict[str, Any]]] = []

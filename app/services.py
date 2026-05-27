@@ -104,7 +104,11 @@ class SmsSyncService:
             "duplicate_count": duplicate_count,
             "synced_at": synced_at,
             "detail": detail,
+            "latest_message": None,
         }
+        latest_query = self.db.list_sms_messages(page=1, page_size=1)
+        if latest_query["items"]:
+            result["latest_message"] = latest_query["items"][0]
         self.db.set_app_state("last_sms_sync", result, synced_at)
         return result
 
@@ -120,3 +124,4 @@ class AppServices:
     sms_service: SmsSyncService
     monitor: Any
     switch_service: Any
+    sms_event_service: Any

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,15 +23,23 @@ from app.models import (
     EsimSwitchStatusResponse,
     HealthResponse,
     MonitorStatusResponse,
+    SmsEventStatusResponse,
     SmsListResponse,
     SyncResponse,
 )
 from app.monitor import SmsMonitor
+from app.sms_event_service import SmsEventService
 from app.services import AppServices, EsimSyncService, SmsSyncService, utc_now_iso
-from app.switch_service import EsimSwitchConflictError, EsimSwitchService
+from app.switch_service import EsimSwitchConflictError, EsimSwitchLockedError, EsimSwitchService
 
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
 
 
 def build_services(config: AppConfig) -> AppServices:
@@ -37,8 +47,9 @@ def build_services(config: AppConfig) -> AppServices:
     adb_client = AdbClient(config)
     esim_service = EsimSyncService(db, adb_client)
     sms_service = SmsSyncService(db, adb_client)
-    monitor = SmsMonitor(config, db, sms_service, adb_client)
-    switch_service = EsimSwitchService(config, esim_service)
+    sms_event_service = SmsEventService()
+    monitor = SmsMonitor(config, db, sms_service, adb_client, sms_event_service=sms_event_service)
+    switch_service = EsimSwitchService(config, db, esim_service)
     return AppServices(
         config=config,
         db=db,
@@ -47,7 +58,12 @@ def build_services(config: AppConfig) -> AppServices:
         sms_service=sms_service,
         monitor=monitor,
         switch_service=switch_service,
+        sms_event_service=sms_event_service,
     )
+
+
+async def run_blocking(func, *args, **kwargs):
+    return await run_in_threadpool(func, *args, **kwargs)
 
 
 def create_app(
@@ -77,6 +93,8 @@ def create_app(
     app.state.services = resolved_services
     app.state.config = resolved_config
     resolved_config.switch_screenshot_dir.mkdir(parents=True, exist_ok=True)
+    if ASSETS_DIR.exists():
+        app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
     app.mount("/switch-screenshots", StaticFiles(directory=str(resolved_config.switch_screenshot_dir)), name="switch-screenshots")
 
     def is_authenticated(request: Request) -> bool:
@@ -129,7 +147,10 @@ def create_app(
         adb_devices: list[str] = []
         adb_error: str | None = None
         try:
-            adb_devices = runtime.adb_client.get_devices()
+            adb_devices = await run_blocking(
+                runtime.adb_client.get_devices,
+                timeout=runtime.config.adb_healthcheck_timeout_seconds,
+            )
             adb_available = len(adb_devices) > 0
             if not adb_devices:
                 adb_error = "No connected adb devices detected"
@@ -142,25 +163,27 @@ def create_app(
             "adb_available": adb_available,
             "adb_devices": adb_devices,
             "adb_error": adb_error,
-            "monitor": runtime.monitor.get_status(),
-            "last_sms_sync": runtime.db.get_app_state_json("last_sms_sync"),
-            "last_esim_sync": runtime.db.get_app_state_json("last_esim_sync"),
+            "monitor": await run_blocking(runtime.monitor.get_status),
+            "last_sms_sync": await run_blocking(runtime.db.get_app_state_json, "last_sms_sync"),
+            "last_esim_sync": await run_blocking(runtime.db.get_app_state_json, "last_esim_sync"),
         }
 
     @app.get("/api/esim/latest", response_model=EsimLatestResponse)
     async def get_latest_esim(request: Request) -> dict:
         require_auth(request)
         runtime = get_services(request)
-        return runtime.esim_service.latest()
+        return await run_blocking(runtime.esim_service.latest)
 
     @app.post("/api/esim/switch", response_model=EsimSwitchStatusResponse)
     async def switch_esim(request: Request, payload: EsimSwitchRequest) -> dict:
         require_auth(request)
         runtime = get_services(request)
         try:
-            return runtime.switch_service.start_switch(payload.display_name)
+            return await run_blocking(runtime.switch_service.start_switch, payload.display_name, payload.lock_minutes)
         except EsimSwitchConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except EsimSwitchLockedError as exc:
+            raise HTTPException(status_code=423, detail=str(exc)) from exc
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -168,7 +191,7 @@ def create_app(
     async def esim_switch_status(request: Request) -> dict:
         require_auth(request)
         runtime = get_services(request)
-        return runtime.switch_service.get_status()
+        return await run_blocking(runtime.switch_service.get_status)
 
     @app.get("/api/esim/switch/stream")
     async def esim_switch_stream(request: Request) -> StreamingResponse:
@@ -181,22 +204,26 @@ def create_app(
                 while True:
                     if await request.is_disconnected():
                         break
-                    message = await queue.get()
-                    yield f"event: {message['event']}\n"
-                    yield f"data: {json.dumps(message['data'], ensure_ascii=False)}\n\n"
+                    try:
+                        message = await asyncio.wait_for(queue.get(), timeout=15)
+                        yield f"event: {message['event']}\n"
+                        yield f"data: {json.dumps(message['data'], ensure_ascii=False)}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": ping\n\n"
             finally:
                 runtime.switch_service.unsubscribe(queue)
 
-        return StreamingResponse(event_generator(), media_type="text/event-stream")
+        return StreamingResponse(event_generator(), media_type="text/event-stream", headers=SSE_HEADERS)
 
     @app.post("/api/esim/sync", response_model=SyncResponse)
     async def sync_esim(request: Request) -> dict:
         require_auth(request)
         runtime = get_services(request)
         try:
-            return runtime.esim_service.sync()
+            return await run_blocking(runtime.esim_service.sync)
         except Exception as exc:  # noqa: BLE001
-            runtime.db.set_app_state(
+            await run_blocking(
+                runtime.db.set_app_state,
                 "last_esim_sync",
                 {"ok": False, "detail": str(exc), "synced_at": utc_now_iso()},
                 utc_now_iso(),
@@ -215,7 +242,8 @@ def create_app(
     ) -> dict:
         require_auth(request)
         runtime = get_services(request)
-        return runtime.sms_service.list_messages(
+        return await run_blocking(
+            runtime.sms_service.list_messages,
             page=page,
             page_size=page_size,
             address=address,
@@ -229,9 +257,10 @@ def create_app(
         require_auth(request)
         runtime = get_services(request)
         try:
-            return runtime.sms_service.sync_all_inbox()
+            return await run_blocking(runtime.sms_service.sync_all_inbox)
         except Exception as exc:  # noqa: BLE001
-            runtime.db.set_app_state(
+            await run_blocking(
+                runtime.db.set_app_state,
                 "last_sms_sync",
                 {"ok": False, "detail": str(exc), "synced_at": utc_now_iso()},
                 utc_now_iso(),
@@ -243,20 +272,43 @@ def create_app(
         require_auth(request)
         runtime = get_services(request)
         try:
-            return runtime.sms_service.sync_all_inbox()
+            return await run_blocking(runtime.sms_service.sync_all_inbox)
         except Exception as exc:  # noqa: BLE001
-            runtime.db.set_app_state(
+            await run_blocking(
+                runtime.db.set_app_state,
                 "last_sms_sync",
                 {"ok": False, "detail": str(exc), "synced_at": utc_now_iso()},
                 utc_now_iso(),
             )
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    @app.get("/api/sms/stream")
+    async def sms_stream(request: Request) -> StreamingResponse:
+        require_auth(request)
+        runtime = get_services(request)
+
+        async def event_generator():
+            queue = await runtime.sms_event_service.subscribe()
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        message = await asyncio.wait_for(queue.get(), timeout=15)
+                        yield f"event: {message['event']}\n"
+                        yield f"data: {json.dumps(message['data'], ensure_ascii=False)}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": ping\n\n"
+            finally:
+                runtime.sms_event_service.unsubscribe(queue)
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream", headers=SSE_HEADERS)
+
     @app.get("/api/monitor/status", response_model=MonitorStatusResponse)
     async def monitor_status(request: Request) -> dict:
         require_auth(request)
         runtime = get_services(request)
-        return runtime.monitor.get_status()
+        return await run_blocking(runtime.monitor.get_status)
 
     return app
 
@@ -265,6 +317,7 @@ def initialize_services(services: AppServices) -> None:
     """Startup path that initializes the database, syncs data, and starts monitoring."""
 
     services.db.init_schema()
+    services.switch_service.restore_state()
     services.db.set_app_state(
         "startup",
         {"ok": True, "detail": "Service startup initialized", "started_at": utc_now_iso()},
