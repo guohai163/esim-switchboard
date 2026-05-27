@@ -47,6 +47,8 @@ assets/
   esim-switchboard-icon.svg
 runtime/
   switch_screenshots/    eSIM 切换步骤截图
+scripts/
+  manage_launch_agent.sh macOS LaunchAgent 管理脚本
 tests/
 requirements.txt
 pytest.ini
@@ -136,6 +138,31 @@ export APP_PASSWORD="你的访问密码"
 ./.venv/bin/python app/main.py
 ```
 
+### 6. 使用 LaunchAgent 在后台启动
+
+如果你希望它在 macOS 登录后自动拉起，或者长期在后台运行，推荐直接用项目自带脚本：
+
+```bash
+scripts/manage_launch_agent.sh
+```
+
+最常见安装方式：
+
+```bash
+APP_PASSWORD="你的访问密码" \
+ADB_PATH="/Users/你的用户名/Library/Android/sdk/platform-tools/adb" \
+scripts/manage_launch_agent.sh install
+```
+
+脚本会：
+
+- 生成 `~/Library/LaunchAgents/com.guohai.esim-switchboard.plist`
+- 用当前用户的 `launchd` 域加载服务
+- 自动执行 `uvicorn app.main:app --host 127.0.0.1 --port 8000`
+- 设置为用户登录后自动拉起
+
+如果系统 `PATH` 中已有 `adb`，或者 `~/Library/Android/sdk/platform-tools/adb` 存在，脚本也会自动尝试探测 `ADB_PATH`。
+
 ## 启动后会发生什么
 
 服务启动后会自动执行：
@@ -191,6 +218,9 @@ export APP_PASSWORD="你的访问密码"
 
 在每一行 eSIM 后面可以直接点击“切换到此 eSIM”。
 
+页面会先要求选择一个锁定时长：`10 / 20 / 30` 分钟。  
+只有切换成功后才会进入锁定期；锁定期间无法再次发起新的 eSIM 切换。
+
 切换过程中，页面会：
 
 - 进入全屏蒙层
@@ -227,6 +257,11 @@ export APP_PASSWORD="你的访问密码"
 - `POST /api/esim/switch`
 - `GET /api/esim/switch/status`
 - `GET /api/esim/switch/stream`
+
+其中 `POST /api/esim/switch` 的请求体必须包含：
+
+- `display_name`
+- `lock_minutes`，可选值只允许 `10`、`20`、`30`
 
 ### 短信接口
 
@@ -283,7 +318,7 @@ curl --cookie "esim_switch_auth=你的cookie值" \
 curl --cookie "esim_switch_auth=你的cookie值" \
   -X POST http://127.0.0.1:8000/api/esim/switch \
   -H 'Content-Type: application/json' \
-  -d '{"display_name":"Club+85264220597"}'
+  -d '{"display_name":"Club+85264220597","lock_minutes":10}'
 ```
 
 ## 数据与产物
@@ -344,6 +379,132 @@ runtime/switch_screenshots/
 - 登录鉴权逻辑
 - eSIM 切换接口与冲突控制
 - 切换流程中的解锁、确认、复位设置、二次确认逻辑
+
+## macOS 开机自启
+
+项目已经附带 `launchd` 管理脚本：
+
+```bash
+scripts/manage_launch_agent.sh
+```
+
+它会把服务安装为当前登录用户下的 `LaunchAgent`，而不是全局 `LaunchDaemon`。  
+这更适合当前项目，因为它依赖：
+
+- 用户目录下的 `.venv`
+- 当前用户可访问的 `adb`
+- 本地运行日志与运行时目录
+
+### 1. 安装为自动启动服务
+
+最常见用法：
+
+```bash
+APP_PASSWORD="你的访问密码" \
+ADB_PATH="/Users/你的用户名/Library/Android/sdk/platform-tools/adb" \
+scripts/manage_launch_agent.sh install
+```
+
+安装后会自动：
+
+- 生成 `~/Library/LaunchAgents/com.guohai.esim-switchboard.plist`
+- 加载并启动服务
+- 设置为用户登录后自动拉起
+
+默认访问地址：
+
+```text
+http://127.0.0.1:8000/
+```
+
+### 2. 修改配置并重载
+
+例如改端口：
+
+```bash
+APP_PASSWORD="你的访问密码" \
+ADB_PATH="/Users/你的用户名/Library/Android/sdk/platform-tools/adb" \
+scripts/manage_launch_agent.sh reload --port 18000
+```
+
+`reload` 会重新生成 plist、重新加载服务并立即重启，适合在调整环境变量、日志路径、端口或 Python 路径后使用。
+
+### 3. 查看服务状态
+
+```bash
+scripts/manage_launch_agent.sh status
+```
+
+### 4. 重启服务
+
+```bash
+scripts/manage_launch_agent.sh restart
+```
+
+### 5. 卸载服务
+
+```bash
+scripts/manage_launch_agent.sh uninstall
+```
+
+### 6. 预览或导出 plist
+
+如果你想先看脚本最终生成的 `plist` 内容：
+
+```bash
+scripts/manage_launch_agent.sh print-plist
+```
+
+### 7. 日志位置
+
+默认日志文件：
+
+```text
+~/Library/Logs/esim-switchboard.log
+~/Library/Logs/esim-switchboard.err.log
+```
+
+### 8. 可传入的常用参数
+
+- `--port 18000`
+- `--host 127.0.0.1`
+- `--label com.guohai.esim-switchboard`
+- `--adb-path /absolute/path/to/adb`
+- `--adb-device-serial 设备序列号`
+- `--python-bin /absolute/path/to/.venv/bin/python`
+- `--work-dir /absolute/path/to/project`
+- `--db-path /absolute/path/to/db.sqlite`
+- `--stdout-log /absolute/path/to/stdout.log`
+- `--stderr-log /absolute/path/to/stderr.log`
+- `--switch-screenshot-dir /absolute/path/to/runtime/switch_screenshots`
+- `--switch-step-delay-seconds 1`
+- `--switch-confirm-wait-seconds 10`
+
+脚本也会把以下环境变量写入 `launchd` 配置：
+
+- `APP_PASSWORD`
+- `ADB_PATH`
+- `ADB_DEVICE_SERIAL`
+- `DB_PATH`
+- `APP_AUTH_COOKIE_NAME`
+- `ADB_HEALTHCHECK_TIMEOUT_SECONDS`
+- `SMS_SYNC_DELAY_SECONDS`
+- `ADB_RECONNECT_DELAY_SECONDS`
+- `DEFAULT_PAGE_SIZE`
+- `MAX_PAGE_SIZE`
+- `SMS_EVENT_POLL_INTERVAL_SECONDS`
+- `SWITCH_SCREENSHOT_DIR`
+- `SWITCH_STEP_DELAY_SECONDS`
+- `SWITCH_CONFIRM_WAIT_SECONDS`
+
+脚本支持的命令一共是：
+
+- `install`
+- `reload`
+- `restart`
+- `status`
+- `uninstall`
+- `print-plist`
 
 ## 常见排障
 

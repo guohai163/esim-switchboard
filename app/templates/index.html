@@ -16,6 +16,8 @@
             --accent: #0f766e;
             --accent-soft: #d9f4ef;
             --danger: #b91c1c;
+            --warning: #b45309;
+            --warning-soft: rgba(245, 158, 11, 0.16);
             --border: rgba(15, 118, 110, 0.18);
             --shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
         }
@@ -88,6 +90,13 @@
             border: 1px solid rgba(15, 118, 110, 0.22);
         }
 
+        button.ghost {
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid rgba(107, 114, 128, 0.18);
+            box-shadow: none;
+        }
+
         button:disabled {
             opacity: 0.55;
             cursor: progress;
@@ -158,6 +167,11 @@
         .pill.bad {
             background: rgba(185, 28, 28, 0.1);
             color: var(--danger);
+        }
+
+        .pill.warn {
+            background: var(--warning-soft);
+            color: var(--warning);
         }
 
         table {
@@ -271,6 +285,76 @@
         .switch-btn[disabled] {
             opacity: 0.55;
             cursor: not-allowed;
+        }
+
+        .lock-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .lock-card-top h3 {
+            margin: 0 0 6px;
+            font-size: 1rem;
+        }
+
+        .lock-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .lock-stat {
+            background: var(--panel-strong);
+            border-radius: 18px;
+            padding: 14px 16px;
+            border: 1px solid rgba(15, 118, 110, 0.12);
+        }
+
+        .lock-stat label {
+            display: block;
+            color: var(--muted);
+            font-size: 0.84rem;
+            margin-bottom: 8px;
+        }
+
+        .lock-stat strong {
+            font-size: 1.05rem;
+            line-height: 1.2;
+        }
+
+        .log-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .log-item {
+            background: rgba(255, 253, 249, 0.88);
+            border: 1px solid rgba(15, 118, 110, 0.1);
+            border-radius: 18px;
+            padding: 14px 16px;
+        }
+
+        .log-item strong {
+            display: block;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+        }
+
+        .log-item p {
+            margin: 0;
+            font-size: 0.92rem;
+            color: var(--text);
+        }
+
+        .log-item small {
+            display: block;
+            color: var(--muted);
+            margin-top: 6px;
         }
 
         .overlay {
@@ -423,6 +507,68 @@
             margin-top: 4px;
         }
 
+        .confirm-card {
+            width: min(460px, 100%);
+            background: rgba(255, 253, 249, 0.98);
+            border-radius: 28px;
+            box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
+            padding: 24px;
+            border: 1px solid rgba(15, 118, 110, 0.16);
+        }
+
+        .confirm-card h2 {
+            margin: 0 0 10px;
+            font-size: 1.32rem;
+        }
+
+        .confirm-card p {
+            margin: 0 0 18px;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .lock-options {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .lock-option {
+            position: relative;
+        }
+
+        .lock-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .lock-option span {
+            display: block;
+            text-align: center;
+            padding: 14px 10px;
+            border-radius: 18px;
+            background: white;
+            border: 1px solid rgba(15, 118, 110, 0.14);
+            color: var(--text);
+            cursor: pointer;
+            transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+        }
+
+        .lock-option input:checked + span {
+            border-color: rgba(15, 118, 110, 0.5);
+            background: var(--accent-soft);
+            color: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .confirm-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
         @media (min-width: 900px) {
             .span-5 {
                 grid-column: span 5;
@@ -435,6 +581,12 @@
 
         @media (max-width: 900px) {
             .switch-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .lock-options {
                 grid-template-columns: 1fr;
             }
         }
@@ -511,6 +663,37 @@
             </article>
 
             <article class="card">
+                <div class="lock-card-top">
+                    <div>
+                        <h2 style="margin-bottom: 6px;">切换锁定与日志</h2>
+                        <div class="meta" id="switch-log-summary">最近切换状态读取中</div>
+                    </div>
+                    <div id="switch-lock-pill" class="pill">未锁定</div>
+                </div>
+                <div class="lock-stats">
+                    <div class="lock-stat">
+                        <label>当前状态</label>
+                        <strong id="switch-lock-status">未锁定</strong>
+                    </div>
+                    <div class="lock-stat">
+                        <label>锁定到</label>
+                        <strong id="switch-lock-until">-</strong>
+                    </div>
+                    <div class="lock-stat">
+                        <label>剩余时间</label>
+                        <strong id="switch-lock-remaining">-</strong>
+                    </div>
+                    <div class="lock-stat">
+                        <label>最近目标 eSIM</label>
+                        <strong id="switch-lock-target">-</strong>
+                    </div>
+                </div>
+                <div id="switch-log-list" class="log-list">
+                    <div class="meta">暂无切换日志</div>
+                </div>
+            </article>
+
+            <article class="card">
                 <div class="toolbar">
                     <div>
                         <h2 style="margin-bottom: 6px;">收件箱短信</h2>
@@ -565,6 +748,31 @@
         </div>
     </div>
 
+    <div id="switch-confirm-overlay" class="overlay" aria-live="polite" aria-modal="true">
+        <div class="confirm-card">
+            <h2>确认切换锁定时长</h2>
+            <p id="switch-confirm-message">切换成功后，在锁定时间内将无法再次切换 eSIM。</p>
+            <div class="lock-options">
+                <label class="lock-option">
+                    <input type="radio" name="lock-minutes" value="10" checked />
+                    <span>10 分钟</span>
+                </label>
+                <label class="lock-option">
+                    <input type="radio" name="lock-minutes" value="20" />
+                    <span>20 分钟</span>
+                </label>
+                <label class="lock-option">
+                    <input type="radio" name="lock-minutes" value="30" />
+                    <span>30 分钟</span>
+                </label>
+            </div>
+            <div class="confirm-actions">
+                <button id="switch-confirm-cancel" class="ghost" type="button">取消</button>
+                <button id="switch-confirm-submit" type="button">确认切换</button>
+            </div>
+        </div>
+    </div>
+
     <div id="auth-overlay" class="auth-overlay" aria-live="polite" aria-modal="true">
         <div class="auth-card">
             <h2>输入访问密码</h2>
@@ -591,11 +799,23 @@
         const switchOverlayClose = document.getElementById("switch-overlay-close");
         const switchPreviewImage = document.getElementById("switch-preview-image");
         const switchStepList = document.getElementById("switch-step-list");
+        const switchConfirmOverlay = document.getElementById("switch-confirm-overlay");
+        const switchConfirmMessage = document.getElementById("switch-confirm-message");
+        const switchConfirmCancel = document.getElementById("switch-confirm-cancel");
+        const switchConfirmSubmit = document.getElementById("switch-confirm-submit");
         const authOverlay = document.getElementById("auth-overlay");
         const authPasswordInput = document.getElementById("auth-password");
         const authLoginBtn = document.getElementById("auth-login-btn");
         const authError = document.getElementById("auth-error");
         const smsToast = document.getElementById("sms-toast");
+        const switchLockPill = document.getElementById("switch-lock-pill");
+        const switchLockStatus = document.getElementById("switch-lock-status");
+        const switchLockUntil = document.getElementById("switch-lock-until");
+        const switchLockRemaining = document.getElementById("switch-lock-remaining");
+        const switchLockTarget = document.getElementById("switch-lock-target");
+        const switchLogSummary = document.getElementById("switch-log-summary");
+        const switchLogList = document.getElementById("switch-log-list");
+
         const smsState = {
             page: 1,
             pageSize: 50,
@@ -606,6 +826,10 @@
             eventSource: null,
             active: false,
             task: null,
+            lockTimer: null,
+            latestEsim: null,
+            pendingDisplayName: null,
+            isSubmittingConfirm: false,
         };
         const smsEventState = {
             eventSource: null,
@@ -625,7 +849,14 @@
                 throw new Error("需要先输入密码");
             }
             if (!response.ok) {
-                const detail = await response.text();
+                const contentType = response.headers.get("content-type") || "";
+                let detail = "";
+                if (contentType.includes("application/json")) {
+                    const payload = await response.json();
+                    detail = payload.detail || JSON.stringify(payload);
+                } else {
+                    detail = await response.text();
+                }
                 throw new Error(detail || `Request failed: ${response.status}`);
             }
             return response.json();
@@ -637,7 +868,10 @@
             authError.textContent = message;
             authPasswordInput.value = "";
             disconnectSwitchEventStream();
+            disconnectSmsEventStream();
+            clearSwitchLockTimer();
             closeSwitchOverlayForce();
+            closeSwitchConfirmOverlay();
         }
 
         function hideAuthOverlay() {
@@ -649,7 +883,6 @@
         function handleUnauthorized() {
             showAuthOverlay("登录状态失效，请重新输入密码。");
             setInteractiveDisabled(false);
-            disconnectSmsEventStream();
         }
 
         function showSmsToast(message) {
@@ -697,13 +930,13 @@
                 parts.push(`重连 ${status.restart_count} 次`);
             }
             if (status.last_event_at) {
-                parts.push(`最近事件 ${status.last_event_at}`);
+                parts.push(`最近事件 ${formatLocalDateTime(status.last_event_at)}`);
             }
             if (status.last_broadcast_source) {
                 parts.push(`最近广播 ${status.last_broadcast_source === "poll" ? "轮询检测" : "实时监听"}`);
             }
             pill.textContent = parts.join(" · ");
-            document.getElementById("monitor-last-hit-at").textContent = status.last_sms_log_hit_at || "-";
+            document.getElementById("monitor-last-hit-at").textContent = formatLocalDateTime(status.last_sms_log_hit_at);
             document.getElementById("monitor-last-hit-source").textContent = `Buffer: ${status.last_sms_log_hit_buffer || status.active_log_buffers?.join(", ") || "-"}`;
             document.getElementById("monitor-log-hit-summary").textContent = `最近命中的短信日志摘要：${status.last_sms_log_hit_line || "-"}`;
         }
@@ -718,9 +951,10 @@
         }
 
         function renderEsim(data) {
+            switchState.latestEsim = data;
             document.getElementById("esim-total").textContent = String(data.embedded_total_count);
             document.getElementById("esim-active").textContent = String(data.embedded_active_count);
-            document.getElementById("esim-sync-at").textContent = data.collected_at || "-";
+            document.getElementById("esim-sync-at").textContent = formatLocalDateTime(data.collected_at);
             const names = [...new Set(data.subscriptions.map((item) => item.display_name).filter(Boolean))];
             const currentValue = displayNameFilter.value;
             displayNameFilter.innerHTML = '<option value="">全部名称</option>';
@@ -736,15 +970,32 @@
                 displayNameFilter.value = "";
                 smsState.displayName = "";
             }
+            renderEsimTable();
+        }
+
+        function renderEsimTable() {
+            const data = switchState.latestEsim;
             const tbody = document.getElementById("esim-table-body");
             tbody.innerHTML = "";
-            if (!data.subscriptions.length) {
-                tbody.innerHTML = '<tr><td colspan="4" class="meta">暂无 eSIM 记录</td></tr>';
+            if (!data || !data.subscriptions?.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="meta">暂无 eSIM 记录</td></tr>';
                 return;
             }
+
+            const lockActive = Boolean(switchState.task?.lock_active);
+            const isRunning = switchState.task?.status === "running";
             for (const item of data.subscriptions) {
                 const row = document.createElement("tr");
                 const isActive = item.is_active;
+                const disabled = !item.display_name || isActive || lockActive || isRunning;
+                let buttonText = "切换到此 eSIM";
+                if (isActive) {
+                    buttonText = "当前激活";
+                } else if (isRunning) {
+                    buttonText = "切换进行中";
+                } else if (lockActive) {
+                    buttonText = "锁定中";
+                }
                 row.innerHTML = `
                     <td>${item.sub_id}</td>
                     <td>${item.display_name || "-"}</td>
@@ -755,20 +1006,22 @@
                             class="switch-btn secondary"
                             type="button"
                             data-display-name="${item.display_name || ""}"
-                            ${!item.display_name || isActive ? "disabled" : ""}
+                            ${disabled ? "disabled" : ""}
                         >
-                            ${isActive ? "当前激活" : "切换到此 eSIM"}
+                            ${buttonText}
                         </button>
                     </td>
                 `;
                 tbody.appendChild(row);
             }
+
             tbody.querySelectorAll(".switch-btn[data-display-name]").forEach((button) => {
-                button.addEventListener("click", () => startEsimSwitch(button.dataset.displayName));
+                button.addEventListener("click", () => openSwitchConfirmOverlay(button.dataset.displayName));
             });
         }
 
         function renderEsimError(message) {
+            switchState.latestEsim = null;
             document.getElementById("esim-total").textContent = "-";
             document.getElementById("esim-active").textContent = "-";
             document.getElementById("esim-sync-at").textContent = "-";
@@ -814,16 +1067,137 @@
             tbody.innerHTML = `<tr><td colspan="5" class="meta">${message}</td></tr>`;
         }
 
-        function formatLocalDateTime(timestamp) {
-            if (timestamp === null || timestamp === undefined || Number.isNaN(Number(timestamp))) {
+        function renderSwitchStatus(status) {
+            const priorTask = switchState.task;
+            switchState.task = status;
+            renderSwitchLockCard(status);
+            renderEsimTable();
+            scheduleSwitchLockRefresh(status);
+
+            if (status.status === "running" || (switchState.active && priorTask)) {
+                renderSwitchTask(status);
+            }
+        }
+
+        function renderSwitchLockCard(status) {
+            const lockActive = Boolean(status.lock_active);
+            if (lockActive) {
+                switchLockPill.className = "pill warn";
+                switchLockPill.textContent = `锁定中 · ${formatRemainingDuration(status.lock_remaining_seconds)}`;
+                switchLockStatus.textContent = `已锁定 ${status.lock_minutes || "-"} 分钟`;
+                switchLockUntil.textContent = formatLocalDateTime(status.lock_until);
+                switchLockRemaining.textContent = formatRemainingDuration(status.lock_remaining_seconds);
+            } else if (status.status === "running") {
+                switchLockPill.className = "pill";
+                switchLockPill.textContent = "切换进行中";
+                switchLockStatus.textContent = "切换执行中";
+                switchLockUntil.textContent = "-";
+                switchLockRemaining.textContent = "等待结果";
+            } else {
+                switchLockPill.className = "pill";
+                switchLockPill.textContent = "未锁定";
+                switchLockStatus.textContent = "未锁定";
+                switchLockUntil.textContent = "-";
+                switchLockRemaining.textContent = "-";
+            }
+
+            const logs = status.logs || [];
+            const latestTarget = logs.find((entry) => entry.display_name)?.display_name || status.target_display_name || "-";
+            switchLockTarget.textContent = latestTarget;
+            switchLogSummary.textContent = logs.length
+                ? `最近 ${Math.min(logs.length, 30)} 条切换记录，最新一条：${formatLocalDateTime(logs[0].created_at)}`
+                : "最近暂无切换记录";
+
+            switchLogList.innerHTML = "";
+            if (!logs.length) {
+                switchLogList.innerHTML = '<div class="meta">暂无切换日志</div>';
+                return;
+            }
+            for (const entry of logs) {
+                const item = document.createElement("div");
+                item.className = "log-item";
+                item.innerHTML = `
+                    <strong>${formatSwitchEventLabel(entry)}</strong>
+                    <p>${entry.message || "-"}</p>
+                    <small>${formatLocalDateTime(entry.created_at)}${entry.display_name ? ` · 目标 ${entry.display_name}` : ""}${entry.lock_minutes ? ` · 锁定 ${entry.lock_minutes} 分钟` : ""}</small>
+                `;
+                switchLogList.appendChild(item);
+            }
+        }
+
+        function formatSwitchEventLabel(entry) {
+            switch (entry.event_type) {
+                case "attempt_started":
+                    return "已发起切换";
+                case "blocked_running":
+                    return "切换被拒绝：已有任务运行中";
+                case "blocked_locked":
+                    return "切换被拒绝：仍在锁定期";
+                case "succeeded":
+                    return "切换成功";
+                case "failed":
+                    return "切换失败";
+                default:
+                    return "切换记录";
+            }
+        }
+
+        function formatLocalDateTime(value) {
+            if (value === null || value === undefined || value === "") {
                 return "-";
             }
-            const date = new Date(Number(timestamp));
+            const normalized = typeof value === "string" ? value.trim() : value;
+            const isNumeric = typeof normalized === "number" || (typeof normalized === "string" && /^-?\d+(\.\d+)?$/.test(normalized));
+            const date = isNumeric ? new Date(Number(normalized)) : new Date(normalized);
             if (Number.isNaN(date.getTime())) {
                 return "-";
             }
-            const pad = (value) => String(value).padStart(2, "0");
+            const pad = (number) => String(number).padStart(2, "0");
             return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        }
+
+        function formatRemainingDuration(totalSeconds) {
+            if (!totalSeconds || totalSeconds <= 0) {
+                return "0 秒";
+            }
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            if (minutes <= 0) {
+                return `${seconds} 秒`;
+            }
+            return `${minutes} 分 ${String(seconds).padStart(2, "0")} 秒`;
+        }
+
+        function clearSwitchLockTimer() {
+            if (switchState.lockTimer) {
+                clearInterval(switchState.lockTimer);
+                switchState.lockTimer = null;
+            }
+        }
+
+        function scheduleSwitchLockRefresh(status) {
+            clearSwitchLockTimer();
+            if (!status.lock_active || !status.lock_until) {
+                return;
+            }
+            switchState.lockTimer = setInterval(async () => {
+                if (!switchState.task?.lock_active || !switchState.task?.lock_until) {
+                    clearSwitchLockTimer();
+                    return;
+                }
+                const remainingSeconds = Math.max(0, Math.floor((Date.parse(switchState.task.lock_until) - Date.now()) / 1000));
+                switchState.task.lock_remaining_seconds = remainingSeconds;
+                renderSwitchLockCard(switchState.task);
+                renderEsimTable();
+                if (remainingSeconds <= 0) {
+                    clearSwitchLockTimer();
+                    try {
+                        await loadSwitchSection();
+                    } catch (error) {
+                        setNotice(`锁定状态刷新失败：${error.message}`, true);
+                    }
+                }
+            }, 1000);
         }
 
         async function loadSmsPage(page = smsState.page) {
@@ -861,6 +1235,20 @@
             }
         }
 
+        async function loadSwitchSection() {
+            try {
+                const status = await fetchJson("/api/esim/switch/status");
+                renderSwitchStatus(status);
+                return { ok: true, data: status };
+            } catch (error) {
+                switchLockPill.className = "pill bad";
+                switchLockPill.textContent = "切换状态读取失败";
+                switchLogSummary.textContent = `切换状态读取失败：${error.message}`;
+                switchLogList.innerHTML = `<div class="meta">${error.message}</div>`;
+                return { ok: false, error: `切换状态读取失败：${error.message}` };
+            }
+        }
+
         async function loadMonitorSection() {
             try {
                 const monitor = await fetchJson("/api/monitor/status");
@@ -883,13 +1271,14 @@
         }
 
         async function loadDashboard() {
-            const [healthResult, esimResult, monitorResult, smsResult] = await Promise.all([
+            const [healthResult, esimResult, switchResult, monitorResult, smsResult] = await Promise.all([
                 loadHealthSection(),
                 loadEsimSection(),
+                loadSwitchSection(),
                 loadMonitorSection(),
                 loadSmsSection(smsState.page),
             ]);
-            const failures = [healthResult, esimResult, monitorResult, smsResult]
+            const failures = [healthResult, esimResult, switchResult, monitorResult, smsResult]
                 .filter((result) => !result.ok)
                 .map((result) => result.error);
             if (failures.length) {
@@ -910,23 +1299,15 @@
             displayNameFilter.disabled = disabled;
             prevPageBtn.disabled = disabled || prevPageBtn.disabled;
             nextPageBtn.disabled = disabled || nextPageBtn.disabled;
-            document.querySelectorAll(".switch-btn").forEach((button) => {
-                if (disabled) {
-                    button.dataset.preDisabled = button.disabled ? "1" : "0";
-                    button.disabled = true;
-                } else if (button.dataset.preDisabled === "0") {
-                    button.disabled = false;
-                }
-            });
             document.body.style.overflow = disabled ? "hidden" : "";
+            renderEsimTable();
         }
 
         function renderSwitchTask(task) {
-            switchState.task = task;
             switchOverlayTitle.textContent = task.status === "failed" ? "eSIM 切换失败" : task.status === "succeeded" ? "eSIM 切换完成" : "正在切换 eSIM";
-            const lastStep = task.steps && task.steps.length ? task.steps[task.steps.length - 1] : null;
             if (task.status === "succeeded" && task.target_display_name) {
-                switchOverlaySubtitle.textContent = `${task.target_display_name} · 已确认切换成功`;
+                const lockText = task.lock_active && task.lock_minutes ? `，已锁定 ${task.lock_minutes} 分钟` : "";
+                switchOverlaySubtitle.textContent = `${task.target_display_name} · 已确认切换成功${lockText}`;
             } else if (task.status === "failed" && task.target_display_name) {
                 switchOverlaySubtitle.textContent = `${task.target_display_name} · ${task.error || task.current_step || "切换失败"}`;
             } else {
@@ -939,7 +1320,7 @@
                 const li = document.createElement("li");
                 li.innerHTML = `
                     <strong>${step.title}</strong>
-                    <small>${step.timestamp}${step.detail ? ` · ${step.detail}` : ""}</small>
+                    <small>${formatLocalDateTime(step.timestamp)}${step.detail ? ` · ${step.detail}` : ""}</small>
                 `;
                 switchStepList.appendChild(li);
             }
@@ -953,7 +1334,7 @@
             if (done) {
                 setInteractiveDisabled(false);
                 if (task.status === "succeeded") {
-                    setNotice(`eSIM 切换完成：${task.target_display_name}`);
+                    setNotice(`eSIM 切换完成：${task.target_display_name}${task.lock_active ? `，锁定至 ${formatLocalDateTime(task.lock_until)}` : ""}`);
                 } else {
                     setNotice(`eSIM 切换失败：${task.error || "未知错误"}`, true);
                 }
@@ -978,6 +1359,32 @@
             switchState.active = false;
             switchOverlayClose.disabled = true;
             setInteractiveDisabled(false);
+        }
+
+        function openSwitchConfirmOverlay(displayName) {
+            if (!displayName || switchState.task?.status === "running" || switchState.task?.lock_active) {
+                return;
+            }
+            switchState.pendingDisplayName = displayName;
+            switchConfirmMessage.textContent = `即将切换到 ${displayName}。切换成功后，在锁定时间内将无法再次切换 eSIM。`;
+            switchConfirmOverlay.classList.add("active");
+            document.body.style.overflow = "hidden";
+        }
+
+        function closeSwitchConfirmOverlay() {
+            if (switchState.isSubmittingConfirm) {
+                return;
+            }
+            switchConfirmOverlay.classList.remove("active");
+            switchState.pendingDisplayName = null;
+            if (!switchState.active) {
+                document.body.style.overflow = "";
+            }
+        }
+
+        function getSelectedLockMinutes() {
+            const input = document.querySelector('input[name="lock-minutes"]:checked');
+            return input ? Number(input.value) : 10;
         }
 
         function disconnectSwitchEventStream() {
@@ -1063,26 +1470,24 @@
             source.onerror = () => {
                 disconnectSwitchEventStream();
             };
-            source.addEventListener("snapshot", (event) => {
+            const handleEvent = (event) => {
                 const task = JSON.parse(event.data);
-                if (task.status === "running") {
-                    openSwitchOverlay();
-                    renderSwitchTask(task);
-                }
-            });
+                renderSwitchStatus(task);
+            };
+            source.addEventListener("snapshot", handleEvent);
             source.addEventListener("task_started", (event) => {
                 openSwitchOverlay();
-                renderSwitchTask(JSON.parse(event.data));
+                renderSwitchStatus(JSON.parse(event.data));
             });
             source.addEventListener("step", (event) => {
-                renderSwitchTask(JSON.parse(event.data));
+                renderSwitchStatus(JSON.parse(event.data));
             });
             source.addEventListener("task_succeeded", async (event) => {
-                renderSwitchTask(JSON.parse(event.data));
-                await loadDashboard();
+                renderSwitchStatus(JSON.parse(event.data));
+                await loadEsimSection();
             });
             source.addEventListener("task_failed", (event) => {
-                renderSwitchTask(JSON.parse(event.data));
+                renderSwitchStatus(JSON.parse(event.data));
             });
             switchState.eventSource = source;
         }
@@ -1111,24 +1516,33 @@
             smsEventState.eventSource = source;
         }
 
-        async function startEsimSwitch(displayName) {
-            if (!displayName || switchState.task?.status === "running") {
+        async function startEsimSwitch(displayName, lockMinutes) {
+            if (!displayName || switchState.task?.status === "running" || switchState.task?.lock_active) {
                 return;
             }
-            openSwitchOverlay();
-            switchOverlayTitle.textContent = "正在切换 eSIM";
-            switchOverlaySubtitle.textContent = `${displayName} · 正在创建任务`;
-            switchStepList.innerHTML = "";
+            switchState.isSubmittingConfirm = true;
+            switchConfirmSubmit.disabled = true;
+            switchConfirmCancel.disabled = true;
             try {
                 await fetchJson("/api/esim/switch", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ display_name: displayName }),
+                    body: JSON.stringify({ display_name: displayName, lock_minutes: lockMinutes }),
                 });
+                closeSwitchConfirmOverlay();
+                openSwitchOverlay();
+                switchOverlayTitle.textContent = "正在切换 eSIM";
+                switchOverlaySubtitle.textContent = `${displayName} · 正在创建任务`;
+                switchStepList.innerHTML = "";
             } catch (error) {
                 setInteractiveDisabled(false);
-                switchOverlay.classList.remove("active");
+                closeSwitchConfirmOverlay();
                 setNotice(`eSIM 切换失败：${error.message}`, true);
+                await loadSwitchSection();
+            } finally {
+                switchState.isSubmittingConfirm = false;
+                switchConfirmSubmit.disabled = false;
+                switchConfirmCancel.disabled = false;
             }
         }
 
@@ -1150,6 +1564,10 @@
         syncEsimBtn.addEventListener("click", () => runAction(syncEsimBtn, "/api/esim/sync", "eSIM 同步"));
         syncSmsBtn.addEventListener("click", () => runAction(syncSmsBtn, "/api/sms/sync-all", "历史短信全量同步"));
         switchOverlayClose.addEventListener("click", closeSwitchOverlay);
+        switchConfirmCancel.addEventListener("click", closeSwitchConfirmOverlay);
+        switchConfirmSubmit.addEventListener("click", async () => {
+            await startEsimSwitch(switchState.pendingDisplayName, getSelectedLockMinutes());
+        });
         displayNameFilter.addEventListener("change", async (event) => {
             smsState.displayName = event.target.value;
             smsState.page = 1;

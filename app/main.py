@@ -30,7 +30,7 @@ from app.models import (
 from app.monitor import SmsMonitor
 from app.sms_event_service import SmsEventService
 from app.services import AppServices, EsimSyncService, SmsSyncService, utc_now_iso
-from app.switch_service import EsimSwitchConflictError, EsimSwitchService
+from app.switch_service import EsimSwitchConflictError, EsimSwitchLockedError, EsimSwitchService
 
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -49,7 +49,7 @@ def build_services(config: AppConfig) -> AppServices:
     sms_service = SmsSyncService(db, adb_client)
     sms_event_service = SmsEventService()
     monitor = SmsMonitor(config, db, sms_service, adb_client, sms_event_service=sms_event_service)
-    switch_service = EsimSwitchService(config, esim_service)
+    switch_service = EsimSwitchService(config, db, esim_service)
     return AppServices(
         config=config,
         db=db,
@@ -179,9 +179,11 @@ def create_app(
         require_auth(request)
         runtime = get_services(request)
         try:
-            return await run_blocking(runtime.switch_service.start_switch, payload.display_name)
+            return await run_blocking(runtime.switch_service.start_switch, payload.display_name, payload.lock_minutes)
         except EsimSwitchConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except EsimSwitchLockedError as exc:
+            raise HTTPException(status_code=423, detail=str(exc)) from exc
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -315,6 +317,7 @@ def initialize_services(services: AppServices) -> None:
     """Startup path that initializes the database, syncs data, and starts monitoring."""
 
     services.db.init_schema()
+    services.switch_service.restore_state()
     services.db.set_app_state(
         "startup",
         {"ok": True, "detail": "Service startup initialized", "started_at": utc_now_iso()},

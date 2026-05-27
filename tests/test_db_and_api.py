@@ -58,15 +58,26 @@ class FakeSwitchService:
             "current_step": None,
             "latest_screenshot_url": None,
             "error": None,
+            "lock_active": False,
+            "lock_until": None,
+            "lock_remaining_seconds": 0,
+            "lock_minutes": None,
+            "logs": [],
             "steps": [],
         }
+        self.locked = False
 
     def get_status(self) -> dict:
         return self.task
 
-    def start_switch(self, display_name: str) -> dict:
+    def restore_state(self) -> None:
+        return None
+
+    def start_switch(self, display_name: str, lock_minutes: int) -> dict:
         if self.task["status"] == "running":
             raise EsimSwitchConflictError("An eSIM switch task is already running")
+        if self.locked:
+            raise RuntimeError("当前处于切换锁定期，需等待到 2026-05-26 08:30:00 后再试，剩余约 10 分钟")
         self.task = {
             "task_id": "task-001",
             "status": "running",
@@ -76,6 +87,20 @@ class FakeSwitchService:
             "current_step": "打开网络设置",
             "latest_screenshot_url": "/switch-screenshots/task-001/01_open_settings.png",
             "error": None,
+            "lock_active": False,
+            "lock_until": None,
+            "lock_remaining_seconds": 0,
+            "lock_minutes": None,
+            "logs": [
+                {
+                    "event_type": "attempt_started",
+                    "display_name": display_name,
+                    "lock_minutes": lock_minutes,
+                    "created_at": "2026-05-26T00:00:00+00:00",
+                    "message": f"发起切换到 {display_name}，成功后将锁定 {lock_minutes} 分钟",
+                    "task_id": "task-001",
+                }
+            ],
             "steps": [
                 {
                     "step_key": "open_settings",
@@ -233,7 +258,7 @@ def test_api_endpoints_return_dashboard_data(tmp_path: Path) -> None:
     monitor = client.get("/api/monitor/status")
     sync_all = client.post("/api/sms/sync-all")
     switch_status = client.get("/api/esim/switch/status")
-    switch_start = client.post("/api/esim/switch", json={"display_name": "Club"})
+    switch_start = client.post("/api/esim/switch", json={"display_name": "Club", "lock_minutes": 10})
 
     assert health.status_code == 200
     assert health.json()["adb_available"] is True
@@ -255,17 +280,28 @@ def test_api_endpoints_return_dashboard_data(tmp_path: Path) -> None:
     assert switch_start.status_code == 200
     assert switch_start.json()["status"] == "running"
     assert switch_start.json()["target_display_name"] == "Club"
+    assert switch_start.json()["logs"][0]["event_type"] == "attempt_started"
+    assert switch_start.json()["logs"][0]["lock_minutes"] == 10
 
 
 def test_switch_conflict_returns_409(tmp_path: Path) -> None:
     client = make_test_app(tmp_path)
     client.post("/api/auth/login", json={"password": "secret123"})
 
-    first = client.post("/api/esim/switch", json={"display_name": "Club"})
-    second = client.post("/api/esim/switch", json={"display_name": "giffgaff sws"})
+    first = client.post("/api/esim/switch", json={"display_name": "Club", "lock_minutes": 10})
+    second = client.post("/api/esim/switch", json={"display_name": "giffgaff sws", "lock_minutes": 20})
 
     assert first.status_code == 200
     assert second.status_code == 409
+
+
+def test_switch_request_rejects_invalid_lock_minutes(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    response = client.post("/api/esim/switch", json={"display_name": "Club", "lock_minutes": 15})
+
+    assert response.status_code == 422
 
 
 def test_auth_protects_business_apis(tmp_path: Path) -> None:
@@ -652,6 +688,116 @@ def test_switch_service_waits_then_verifies_switch(tmp_path: Path) -> None:
 
     assert "dumpsys isub 确认成功" in detail
     assert "Club+85264220597" in detail
+
+
+def test_switch_service_persists_lock_and_logs_after_success(tmp_path: Path) -> None:
+    from app.switch_service import EsimSwitchService
+
+    class FakeEsimSyncService:
+        def sync(self) -> dict:
+            return {"ok": True}
+
+    config = AppConfig.from_env(tmp_path)
+    service = EsimSwitchService(config, FakeEsimSyncService())  # type: ignore[arg-type]
+
+    def fake_run_switch_flow(task_id: str, display_name: str) -> None:
+        with service._lock:
+            service._task.steps = []
+            service._task.current_step = "切换生效确认完成"
+        service._finish_task("succeeded", None)
+
+    class ImmediateThread:
+        def __init__(self, target, args, **kwargs):  # noqa: ANN001, ANN003
+            self.target = target
+            self.args = args
+
+        def start(self) -> None:
+            self.target(*self.args)
+
+    service._run_switch_flow = fake_run_switch_flow  # type: ignore[method-assign]
+
+    with patch("app.switch_service.threading.Thread", ImmediateThread):
+        status = service.start_switch("Club", 20)
+
+    assert status["status"] == "succeeded"
+    assert status["lock_active"] is True
+    assert status["lock_minutes"] == 20
+    assert status["logs"][0]["event_type"] == "succeeded"
+    assert status["logs"][1]["event_type"] == "attempt_started"
+
+    restored = EsimSwitchService(config, FakeEsimSyncService())  # type: ignore[arg-type]
+    restored.restore_state()
+    restored_status = restored.get_status()
+
+    assert restored_status["lock_active"] is True
+    assert restored_status["lock_minutes"] == 20
+    assert restored_status["logs"][0]["event_type"] == "succeeded"
+
+
+def test_switch_service_blocks_when_lock_is_active(tmp_path: Path) -> None:
+    from app.switch_service import EsimSwitchLockedError, EsimSwitchService
+
+    class FakeEsimSyncService:
+        def sync(self) -> dict:
+            return {"ok": True}
+
+    config = AppConfig.from_env(tmp_path)
+    service = EsimSwitchService(config, FakeEsimSyncService())  # type: ignore[arg-type]
+
+    future_lock_until = "2099-05-26T00:10:00+00:00"
+    service.db.set_app_state(
+        "esim_switch_lock",
+        {
+            "lock_until": future_lock_until,
+            "lock_minutes": 10,
+            "last_target_display_name": "Club",
+            "locked_at": "2099-05-26T00:00:00+00:00",
+        },
+        "2099-05-26T00:00:00+00:00",
+    )
+    service.restore_state()
+
+    try:
+        service.start_switch("giffgaff sws", 10)
+    except EsimSwitchLockedError as exc:
+        assert "切换锁定期" in str(exc)
+    else:
+        raise AssertionError("Expected EsimSwitchLockedError")
+
+    status = service.get_status()
+    assert status["lock_active"] is True
+    assert status["logs"][0]["event_type"] == "blocked_locked"
+
+
+def test_switch_service_failed_switch_does_not_create_lock(tmp_path: Path) -> None:
+    from app.switch_service import EsimSwitchService
+
+    class FakeEsimSyncService:
+        def sync(self) -> dict:
+            return {"ok": True}
+
+    config = AppConfig.from_env(tmp_path)
+    service = EsimSwitchService(config, FakeEsimSyncService())  # type: ignore[arg-type]
+
+    def fake_run_switch_flow(task_id: str, display_name: str) -> None:  # noqa: ARG001
+        service._finish_task("failed", "mock failure")
+
+    class ImmediateThread:
+        def __init__(self, target, args, **kwargs):  # noqa: ANN001, ANN003
+            self.target = target
+            self.args = args
+
+        def start(self) -> None:
+            self.target(*self.args)
+
+    service._run_switch_flow = fake_run_switch_flow  # type: ignore[method-assign]
+
+    with patch("app.switch_service.threading.Thread", ImmediateThread):
+        status = service.start_switch("Club", 30)
+
+    assert status["status"] == "failed"
+    assert status["lock_active"] is False
+    assert status["logs"][0]["event_type"] == "failed"
 
 
 def test_adb_query_sms_inbox_uses_remote_shell_quoting(tmp_path: Path) -> None:

@@ -108,6 +108,16 @@ class AuthStatusResponse(BaseModel):
 
 class EsimSwitchRequest(BaseModel):
     display_name: str
+    lock_minutes: Literal[10, 20, 30]
+
+
+class EsimSwitchLogEntryOut(BaseModel):
+    event_type: Literal["attempt_started", "blocked_running", "blocked_locked", "succeeded", "failed"]
+    display_name: str | None = None
+    lock_minutes: int | None = None
+    created_at: str
+    message: str
+    task_id: str | None = None
 
 
 class EsimSwitchStepOut(BaseModel):
@@ -128,6 +138,11 @@ class EsimSwitchStatusResponse(BaseModel):
     current_step: str | None = None
     latest_screenshot_url: str | None = None
     error: str | None = None
+    lock_active: bool = False
+    lock_until: str | None = None
+    lock_remaining_seconds: int = 0
+    lock_minutes: int | None = None
+    logs: list[EsimSwitchLogEntryOut] = Field(default_factory=list)
     steps: list[EsimSwitchStepOut] = Field(default_factory=list)
 
 
