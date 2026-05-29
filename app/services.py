@@ -127,3 +127,4 @@ class AppServices:
     switch_service: Any
     sms_event_service: Any
     collab_service: CollabSessionService
+    keepalive_service: Any | None = None

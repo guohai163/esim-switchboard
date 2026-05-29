@@ -8,6 +8,7 @@ from app.adb import AdbClient, AdbCommandError
 from app.collab import CollabSessionService
 from app.config import AppConfig
 from app.db import Database
+from app.keepalive_service import KeepaliveService
 from app.main import build_services, create_app
 from app.services import AppServices
 from app.models import SmsMessageRecord
@@ -170,6 +171,89 @@ class FakeSmsEventService:
         return None
 
 
+class FakeKeepaliveService:
+    def __init__(self) -> None:
+        self.rules: dict[str, dict] = {}
+        self.started = False
+        self.testing_conflict = False
+
+    def start(self) -> None:
+        self.started = True
+
+    def stop(self, timeout: float = 5) -> None:  # noqa: ARG002
+        self.started = False
+
+    def list_rules(self) -> list[dict]:
+        return list(self.rules.values())
+
+    def upsert_rule(
+        self,
+        esim_sub_id: str,
+        *,
+        display_name: str | None,
+        carrier_name: str | None,
+        target_phone: str,
+        interval_days: int,
+        enabled: bool,
+    ) -> dict:
+        rule = {
+            "esim_sub_id": esim_sub_id,
+            "esim_display_name": display_name,
+            "esim_carrier_name": carrier_name,
+            "timezone_name": "Asia/Shanghai",
+            "window_start_hour": 9,
+            "window_end_hour": 19,
+            "target_phone": target_phone,
+            "interval_days": interval_days,
+            "enabled": enabled,
+            "message_preview": f"保号 {display_name or ''} 2026-05-29".strip(),
+            "last_attempt_at": None,
+            "last_success_at": None,
+            "next_run_at": "2026-05-30T00:00:00+00:00" if enabled else None,
+            "retry_after_at": None,
+            "last_status": "scheduled" if enabled else "idle",
+            "last_error": None,
+            "created_at": "2026-05-29T00:00:00+00:00",
+            "updated_at": "2026-05-29T00:00:00+00:00",
+        }
+        self.rules[esim_sub_id] = rule
+        return rule
+
+    def patch_rule(self, esim_sub_id: str, *, timezone_name=None, target_phone=None, interval_days=None, enabled=None):  # noqa: ANN001
+        current = self.rules.get(esim_sub_id)
+        if current is None:
+            return None
+        if timezone_name is not None:
+            current["timezone_name"] = timezone_name
+        if target_phone is not None:
+            current["target_phone"] = target_phone
+        if interval_days is not None:
+            current["interval_days"] = interval_days
+        if enabled is not None:
+            current["enabled"] = enabled
+            current["last_status"] = "scheduled" if enabled else "idle"
+        current["updated_at"] = "2026-05-29T00:10:00+00:00"
+        return current
+
+    def delete_rule(self, esim_sub_id: str) -> bool:
+        return self.rules.pop(esim_sub_id, None) is not None
+
+    def run_rule_test(self, esim_sub_id: str) -> dict:
+        if self.testing_conflict:
+            raise RuntimeError("An eSIM switch task is already running")
+        current = self.rules.get(esim_sub_id)
+        if current is None:
+            raise KeyError("Keepalive rule not found")
+        current["last_attempt_at"] = "2026-05-29T01:00:00+00:00"
+        current["last_success_at"] = "2026-05-29T01:00:00+00:00"
+        current["next_run_at"] = "2026-05-30T01:00:00+00:00"
+        current["last_status"] = "succeeded"
+        current["last_error"] = None
+        current["retry_after_at"] = None
+        current["updated_at"] = "2026-05-29T01:00:00+00:00"
+        return current
+
+
 class RecordingAdbClient:
     def __init__(self, config: AppConfig) -> None:
         from app.adb import AdbClient
@@ -207,6 +291,7 @@ def make_test_app(tmp_path: Path) -> TestClient:
     services.switch_service = FakeSwitchService()
     services.sms_event_service = FakeSmsEventService()
     services.monitor.sms_event_service = services.sms_event_service
+    services.keepalive_service = FakeKeepaliveService()
     services.db.init_schema()
     services.esim_service.sync()
     services.sms_service.sync_all_inbox()
@@ -243,6 +328,7 @@ def make_test_client_with_config(tmp_path: Path, *, trust_proxy_headers: bool = 
     services.switch_service = FakeSwitchService()
     services.sms_event_service = FakeSmsEventService()
     services.monitor.sms_event_service = services.sms_event_service
+    services.keepalive_service = FakeKeepaliveService()
     services.db.init_schema()
     services.esim_service.sync()
     services.sms_service.sync_all_inbox()
@@ -273,6 +359,121 @@ def test_database_upsert_sms_deduplicates(tmp_path: Path) -> None:
     assert second_duplicates == 1
 
 
+def test_keepalive_database_rule_roundtrip(tmp_path: Path) -> None:
+    db = Database(tmp_path / "db.sqlite")
+    db.init_schema()
+
+    created = db.upsert_keepalive_rule(
+        "5",
+        esim_display_name="Club",
+        esim_carrier_name="没有服务",
+        timezone_name="Asia/Shanghai",
+        window_start_hour=9,
+        window_end_hour=19,
+        target_phone="13800138000",
+        interval_days=2,
+        enabled=True,
+        message_preview="保号 Club 2026-05-29",
+        next_run_at="2026-05-31T00:00:00+00:00",
+        last_status="scheduled",
+        updated_at="2026-05-29T00:00:00+00:00",
+    )
+    patched = db.patch_keepalive_rule(
+        "5",
+        enabled=False,
+        last_status="idle",
+        updated_at="2026-05-29T00:01:00+00:00",
+    )
+    listed = db.list_keepalive_rules()
+    deleted = db.delete_keepalive_rule("5")
+
+    assert created["enabled"] is True
+    assert created["target_phone"] == "13800138000"
+    assert created["timezone_name"] == "Asia/Shanghai"
+    assert patched is not None
+    assert patched["enabled"] is False
+    assert listed[0]["esim_sub_id"] == "5"
+    assert deleted is True
+
+
+def test_keepalive_message_preview_truncates_to_40_chars(tmp_path: Path) -> None:
+    config, services = make_test_services(tmp_path)
+    keepalive = KeepaliveService(config, services.db, services.esim_service, FakeSwitchService(), FakeAdbClient())
+
+    preview = keepalive.build_message_preview("非常非常非常非常非常非常非常非常长的号码名称ABCDEFG", "2026-05-29T00:00:00+00:00")
+
+    assert preview.startswith("保号 ")
+    assert "2026-05-29" in preview
+    assert len(preview) <= 40
+
+
+def test_keepalive_marks_waiting_when_manual_switch_running(tmp_path: Path) -> None:
+    config, services = make_test_services(tmp_path)
+    services.adb_client = FakeAdbClient()
+    services.esim_service.adb_client = services.adb_client
+    services.esim_service.sync()
+    fake_switch = FakeSwitchService()
+    fake_switch.task["status"] = "running"
+    keepalive = KeepaliveService(config, services.db, services.esim_service, fake_switch, FakeAdbClient())
+    keepalive.upsert_rule(
+        "5",
+        display_name="Club",
+        carrier_name="没有服务",
+        timezone_name="Asia/Shanghai",
+        target_phone="13800138000",
+        interval_days=1,
+        enabled=True,
+    )
+    services.db.patch_keepalive_rule("5", next_run_at="2000-01-01T00:00:00+00:00", updated_at="2026-05-29T00:00:00+00:00")
+
+    keepalive.execute_rule(services.db.get_keepalive_rule("5"))
+    updated = services.db.get_keepalive_rule("5")
+
+    assert updated is not None
+    assert updated["last_status"] == "waiting"
+    assert updated["retry_after_at"] is not None
+
+
+def test_keepalive_rejects_invalid_timezone_name(tmp_path: Path) -> None:
+    config, services = make_test_services(tmp_path)
+    keepalive = KeepaliveService(config, services.db, services.esim_service, FakeSwitchService(), FakeAdbClient())
+
+    try:
+        keepalive.upsert_rule(
+            "5",
+            display_name="Club",
+            carrier_name="没有服务",
+            timezone_name="Invalid/Timezone",
+            target_phone="13800138000",
+            interval_days=1,
+            enabled=True,
+        )
+    except ValueError as exc:
+        assert "timezone_name" in str(exc)
+    else:
+        raise AssertionError("Expected invalid timezone to raise ValueError")
+
+
+def test_keepalive_defers_to_same_day_window_start_before_9am(tmp_path: Path) -> None:
+    config, services = make_test_services(tmp_path)
+    keepalive = KeepaliveService(config, services.db, services.esim_service, FakeSwitchService(), FakeAdbClient())
+
+    inside_window, deferred_run_at = keepalive._resolve_send_window("2026-05-29T00:30:00+00:00", __import__("zoneinfo").ZoneInfo("Asia/Shanghai"), 9, 19)  # noqa: SLF001
+
+    assert inside_window is False
+    assert deferred_run_at == "2026-05-29T01:00:00+00:00"
+
+
+def test_keepalive_defers_to_next_day_window_start_after_7pm(tmp_path: Path) -> None:
+    config, services = make_test_services(tmp_path)
+    keepalive = KeepaliveService(config, services.db, services.esim_service, FakeSwitchService(), FakeAdbClient())
+
+    inside_window, deferred_run_at = keepalive._resolve_send_window("2026-05-29T12:30:00+00:00", __import__("zoneinfo").ZoneInfo("Asia/Shanghai"), 9, 19)  # noqa: SLF001
+
+    assert inside_window is False
+    assert deferred_run_at == "2026-05-30T01:00:00+00:00"
+
+
 def test_api_endpoints_return_dashboard_data(tmp_path: Path) -> None:
     client = make_test_app(tmp_path)
     login = client.post("/api/auth/login", json={"password": "secret123"})
@@ -283,6 +484,7 @@ def test_api_endpoints_return_dashboard_data(tmp_path: Path) -> None:
     sms = client.get("/api/sms?page=1&page_size=10")
     sms_filtered = client.get("/api/sms?page=1&page_size=10&display_name=Club")
     monitor = client.get("/api/monitor/status")
+    keepalive = client.get("/api/keepalive/rules")
     sync_all = client.post("/api/sms/sync-all")
     switch_status = client.get("/api/esim/switch/status")
     switch_start = client.post("/api/esim/switch", json={"display_name": "Club", "lock_minutes": 10})
@@ -300,6 +502,8 @@ def test_api_endpoints_return_dashboard_data(tmp_path: Path) -> None:
     assert sms_filtered.json()["items"][0]["display_name"] == "Club"
     assert monitor.status_code == 200
     assert monitor.json()["active_log_buffers"] == ["radio"]
+    assert keepalive.status_code == 200
+    assert keepalive.json()["items"] == []
     assert sync_all.status_code == 200
     assert sync_all.json()["detail"] == "full inbox sync"
     assert switch_status.status_code == 200
@@ -320,6 +524,100 @@ def test_switch_conflict_returns_409(tmp_path: Path) -> None:
 
     assert first.status_code == 200
     assert second.status_code == 409
+
+
+def test_keepalive_rule_crud_endpoints(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    created = client.put(
+        "/api/keepalive/rules/5",
+        json={
+            "display_name": "Club",
+            "carrier_name": "没有服务",
+            "timezone_name": "Asia/Shanghai",
+            "target_phone": "13800138000",
+            "interval_days": 3,
+            "enabled": True,
+        },
+    )
+    listed = client.get("/api/keepalive/rules")
+    patched = client.patch("/api/keepalive/rules/5", json={"enabled": False})
+    deleted = client.delete("/api/keepalive/rules/5")
+
+    assert created.status_code == 200
+    assert created.json()["target_phone"] == "13800138000"
+    assert created.json()["interval_days"] == 3
+    assert created.json()["timezone_name"] == "Asia/Shanghai"
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["esim_sub_id"] == "5"
+    assert patched.status_code == 200
+    assert patched.json()["enabled"] is False
+    assert deleted.status_code == 200
+    assert deleted.json()["ok"] is True
+
+
+def test_keepalive_rule_test_endpoint(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    client.put(
+        "/api/keepalive/rules/5",
+        json={
+            "display_name": "Club",
+            "carrier_name": "没有服务",
+            "timezone_name": "Asia/Shanghai",
+            "target_phone": "13800138000",
+            "interval_days": 3,
+            "enabled": True,
+        },
+    )
+
+    tested = client.post("/api/keepalive/rules/5/test")
+
+    assert tested.status_code == 200
+    assert tested.json()["last_status"] == "succeeded"
+    assert tested.json()["last_success_at"] == "2026-05-29T01:00:00+00:00"
+    assert tested.json()["next_run_at"] == "2026-05-30T01:00:00+00:00"
+
+
+def test_keepalive_rule_test_endpoint_returns_409_on_conflict(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    client.put(
+        "/api/keepalive/rules/5",
+        json={
+            "display_name": "Club",
+            "carrier_name": "没有服务",
+            "timezone_name": "Asia/Shanghai",
+            "target_phone": "13800138000",
+            "interval_days": 3,
+            "enabled": True,
+        },
+    )
+    client.app.state.services.keepalive_service.testing_conflict = True
+
+    tested = client.post("/api/keepalive/rules/5/test")
+
+    assert tested.status_code == 409
+
+
+def test_keepalive_rejects_non_embedded_sub_id(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    response = client.put(
+        "/api/keepalive/rules/999",
+        json={
+            "display_name": "Missing",
+            "carrier_name": "Unknown",
+            "timezone_name": "Asia/Shanghai",
+            "target_phone": "13800138000",
+            "interval_days": 3,
+            "enabled": True,
+        },
+    )
+
+    assert response.status_code == 404
 
 
 def test_switch_request_rejects_invalid_lock_minutes(tmp_path: Path) -> None:

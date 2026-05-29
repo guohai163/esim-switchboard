@@ -16,6 +16,7 @@ from app.adb import AdbClient, AdbCommandError
 from app.collab import CollabSessionService
 from app.config import AppConfig
 from app.db import Database
+from app.keepalive_service import KeepaliveService
 from app.models import (
     AuthLoginRequest,
     AuthStatusResponse,
@@ -23,6 +24,10 @@ from app.models import (
     EsimSwitchRequest,
     EsimSwitchStatusResponse,
     HealthResponse,
+    KeepaliveRuleListResponse,
+    KeepaliveRuleOut,
+    KeepaliveRulePatchRequest,
+    KeepaliveRuleUpsertRequest,
     MonitorStatusResponse,
     SmsEventStatusResponse,
     SmsListResponse,
@@ -52,6 +57,7 @@ def build_services(config: AppConfig) -> AppServices:
     monitor = SmsMonitor(config, db, sms_service, adb_client, sms_event_service=sms_event_service)
     switch_service = EsimSwitchService(config, db, esim_service)
     collab_service = CollabSessionService(config)
+    keepalive_service = KeepaliveService(config, db, esim_service, switch_service, adb_client)
     return AppServices(
         config=config,
         db=db,
@@ -62,6 +68,7 @@ def build_services(config: AppConfig) -> AppServices:
         switch_service=switch_service,
         sms_event_service=sms_event_service,
         collab_service=collab_service,
+        keepalive_service=keepalive_service,
     )
 
 
@@ -96,6 +103,8 @@ def create_app(
                 await app.state.collab_cleanup_task
             except asyncio.CancelledError:
                 pass
+            if resolved_services.keepalive_service:
+                resolved_services.keepalive_service.stop()
             resolved_services.monitor.stop()
 
     app = FastAPI(
@@ -360,6 +369,72 @@ def create_app(
         runtime = get_services(request)
         return await run_blocking(runtime.monitor.get_status)
 
+    @app.get("/api/keepalive/rules", response_model=KeepaliveRuleListResponse)
+    async def list_keepalive_rules(request: Request) -> dict:
+        require_auth(request)
+        runtime = get_services(request)
+        return {"items": await run_blocking(runtime.keepalive_service.list_rules)}
+
+    @app.put("/api/keepalive/rules/{sub_id}", response_model=KeepaliveRuleOut)
+    async def upsert_keepalive_rule(request: Request, sub_id: str, payload: KeepaliveRuleUpsertRequest) -> dict:
+        require_auth(request)
+        runtime = get_services(request)
+        latest = await run_blocking(runtime.esim_service.latest)
+        target = next(
+            (item for item in latest.get("subscriptions", []) if item.get("sub_id") == sub_id and item.get("is_embedded")),
+            None,
+        )
+        if target is None:
+            raise HTTPException(status_code=404, detail="Target eSIM not found")
+        return await run_blocking(
+            runtime.keepalive_service.upsert_rule,
+            sub_id,
+            display_name=payload.display_name or target.get("display_name"),
+            carrier_name=payload.carrier_name or target.get("carrier_name"),
+            timezone_name=payload.timezone_name,
+            target_phone=payload.target_phone,
+            interval_days=payload.interval_days,
+            enabled=payload.enabled,
+        )
+
+    @app.patch("/api/keepalive/rules/{sub_id}", response_model=KeepaliveRuleOut)
+    async def patch_keepalive_rule(request: Request, sub_id: str, payload: KeepaliveRulePatchRequest) -> dict:
+        require_auth(request)
+        runtime = get_services(request)
+        result = await run_blocking(
+            runtime.keepalive_service.patch_rule,
+            sub_id,
+            timezone_name=payload.timezone_name,
+            target_phone=payload.target_phone,
+            interval_days=payload.interval_days,
+            enabled=payload.enabled,
+        )
+        if result is None:
+            raise HTTPException(status_code=404, detail="Keepalive rule not found")
+        return result
+
+    @app.delete("/api/keepalive/rules/{sub_id}")
+    async def delete_keepalive_rule(request: Request, sub_id: str) -> dict:
+        require_auth(request)
+        runtime = get_services(request)
+        deleted = await run_blocking(runtime.keepalive_service.delete_rule, sub_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Keepalive rule not found")
+        return {"ok": True}
+
+    @app.post("/api/keepalive/rules/{sub_id}/test", response_model=KeepaliveRuleOut)
+    async def test_keepalive_rule(request: Request, sub_id: str) -> dict:
+        require_auth(request)
+        runtime = get_services(request)
+        try:
+            return await run_blocking(runtime.keepalive_service.run_rule_test, sub_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Keepalive rule not found") from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     @app.websocket("/api/collab/ws")
     async def collab_ws(websocket: WebSocket) -> None:
         if not is_authenticated(websocket):
@@ -435,6 +510,8 @@ def initialize_services(services: AppServices) -> None:
             utc_now_iso(),
         )
     services.monitor.start()
+    if services.keepalive_service:
+        services.keepalive_service.start()
 
 
 def get_services(request: Request) -> AppServices:

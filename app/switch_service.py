@@ -176,6 +176,57 @@ class EsimSwitchService:
         thread.start()
         return self.get_status()
 
+    def run_keepalive_switch(self, display_name: str) -> None:
+        with self._lock:
+            if self._task.status == "running":
+                raise EsimSwitchConflictError("An eSIM switch task is already running")
+            task_id = uuid.uuid4().hex
+            started_at = utc_now_iso()
+            self._task = SwitchTask(
+                task_id=task_id,
+                status="running",
+                target_display_name=display_name,
+                requested_lock_minutes=None,
+                started_at=started_at,
+                current_step="starting",
+                steps=[],
+            )
+            self._notify_locked("task_started", self._serialize_task(self._task))
+        self._run_keepalive_flow(task_id, display_name)
+
+    def _run_keepalive_flow(self, task_id: str, display_name: str) -> None:
+        task_dir = self.config.switch_screenshot_dir / task_id
+        task_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            device = self._connect_device()
+            device.screen_on()
+            self._capture_step(task_id, task_dir, "screen_on", "点亮屏幕", "succeeded", "屏幕已点亮", device)
+            self._ensure_unlocked(device, task_id, task_dir)
+            self._reset_settings_app(device, task_id, task_dir)
+            device.shell("am start -a android.settings.WIRELESS_SETTINGS")
+            time.sleep(self.config.switch_step_delay_seconds)
+            self._capture_step(task_id, task_dir, "open_settings", "打开网络设置", "succeeded", "已打开无线设置页", device)
+            self._click_first_match(device, self.config.esim_settings_label)
+            time.sleep(self.config.switch_step_delay_seconds)
+            self._capture_step(task_id, task_dir, "open_sim_list", "进入 SIM 卡列表", "succeeded", "已进入 SIM 卡设置", device)
+            self._click_exact_text(device, display_name)
+            time.sleep(self.config.switch_step_delay_seconds)
+            self._capture_step(task_id, task_dir, "select_target", "选择目标 eSIM", "succeeded", f"已点击 {display_name}", device)
+            self._click_first_match(device, self.config.esim_toggle_label)
+            time.sleep(self.config.switch_step_delay_seconds)
+            self._capture_step(task_id, task_dir, "toggle_target", "启用目标 eSIM", "succeeded", "已点击启用开关", device)
+            if self._has_confirm_dialog(device, display_name):
+                self._confirm_switch_dialog(device, display_name)
+                time.sleep(self.config.switch_step_delay_seconds)
+                self._capture_step(task_id, task_dir, "confirm_switch", "确认切换", "succeeded", f"已确认切换到 {display_name}", device)
+            verification_detail = self._wait_and_verify_switch(device, task_id, task_dir, display_name)
+            self.esim_service.sync()
+            self._capture_step(task_id, task_dir, "verify_switch", "切换生效确认完成", "succeeded", verification_detail, device)
+            self._finish_keepalive_task("succeeded", None)
+        except Exception as exc:  # noqa: BLE001
+            self._finish_keepalive_task("failed", str(exc))
+            raise
+
     def _run_switch_flow(self, task_id: str, display_name: str) -> None:
         task_dir = self.config.switch_screenshot_dir / task_id
         task_dir.mkdir(parents=True, exist_ok=True)
@@ -321,6 +372,19 @@ class EsimSwitchService:
                 )
                 event_name = "task_failed"
 
+            self._notify_locked(event_name, self._serialize_task(self._task))
+
+    def _finish_keepalive_task(self, status: SwitchTaskStatus, error: str | None) -> None:
+        with self._lock:
+            finished_at = utc_now_iso()
+            self._task.status = status
+            self._task.finished_at = finished_at
+            self._task.error = error
+            self._task.current_step = self._task.steps[-1].title if self._task.steps else self._task.current_step
+            if status == "succeeded":
+                event_name = "task_succeeded"
+            else:
+                event_name = "task_failed"
             self._notify_locked(event_name, self._serialize_task(self._task))
 
     def _capture_step(

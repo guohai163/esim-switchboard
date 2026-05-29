@@ -26,9 +26,14 @@ class AppConfig:
     switch_screenshot_dir: Path
     switch_step_delay_seconds: float
     switch_confirm_wait_seconds: float
+    keepalive_poll_interval_seconds: float
+    keepalive_retry_minutes: int
+    keepalive_switch_settle_seconds: float
     esim_settings_label: tuple[str, ...]
     esim_toggle_label: tuple[str, ...]
     esim_confirm_label: tuple[str, ...]
+    sms_compose_package: str
+    sms_send_button_labels: tuple[str, ...]
     app_password: str
     app_auth_cookie_name: str
     app_auth_cookie_value: str
@@ -92,9 +97,14 @@ class AppConfig:
             switch_screenshot_dir=Path(os.getenv("SWITCH_SCREENSHOT_DIR", resolved_base_dir / "runtime" / "switch_screenshots")),
             switch_step_delay_seconds=float(os.getenv("SWITCH_STEP_DELAY_SECONDS", "1")),
             switch_confirm_wait_seconds=float(os.getenv("SWITCH_CONFIRM_WAIT_SECONDS", "10")),
+            keepalive_poll_interval_seconds=float(os.getenv("KEEPALIVE_POLL_INTERVAL_SECONDS", "60")),
+            keepalive_retry_minutes=int(os.getenv("KEEPALIVE_RETRY_MINUTES", "15")),
+            keepalive_switch_settle_seconds=float(os.getenv("KEEPALIVE_SWITCH_SETTLE_SECONDS", "5")),
             esim_settings_label=("SIM 卡", "SIMs", "SIM cards"),
             esim_toggle_label=("使用 SIM 卡", "启用", "开启", "Use SIM", "Turn on SIM"),
             esim_confirm_label=("是", "开启", "确定", "继续", "OK"),
+            sms_compose_package=os.getenv("SMS_COMPOSE_PACKAGE", "com.google.android.apps.messaging"),
+            sms_send_button_labels=("发送", "Send", "发送 SMS", "发送短信"),
             app_password=app_password,
             app_auth_cookie_name=app_auth_cookie_name,
             app_auth_cookie_value=app_auth_cookie_value,

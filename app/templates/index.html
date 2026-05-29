@@ -926,6 +926,91 @@
             gap: 10px;
         }
 
+        .keepalive-card .card-top {
+            margin-bottom: 16px;
+        }
+
+        .keepalive-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .keepalive-item {
+            padding: 14px;
+            border: 1px solid #e1ebe8;
+            border-radius: 8px;
+            background: var(--panel-strong);
+            display: grid;
+            gap: 10px;
+        }
+
+        .keepalive-item-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .keepalive-item-name {
+            font-weight: 700;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .keepalive-item-meta,
+        .keepalive-item-status {
+            color: var(--muted);
+            font-size: 0.88rem;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .keepalive-item-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .keepalive-item-actions button {
+            padding: 9px 14px;
+            font-size: 0.88rem;
+        }
+
+        .keepalive-form {
+            display: grid;
+            gap: 14px;
+        }
+
+        .keepalive-form label {
+            display: grid;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .keepalive-form input,
+        .keepalive-form select,
+        .keepalive-form textarea {
+            width: 100%;
+            border: 1px solid rgba(15, 118, 110, 0.22);
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 0.95rem;
+            background: white;
+            color: var(--text);
+        }
+
+        .keepalive-form textarea {
+            min-height: 88px;
+            resize: none;
+        }
+
+        .keepalive-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
         @media (min-width: 900px) {
             .span-4 {
                 grid-column: span 4;
@@ -1035,6 +1120,7 @@
             </div>
             <div class="actions">
                 <button id="sync-esim-btn">同步 eSIM</button>
+                <button id="open-keepalive-btn" class="secondary" type="button">保号设置</button>
                 <button id="sync-sms-btn" class="secondary">拉取全部历史短信</button>
             </div>
         </section>
@@ -1069,6 +1155,19 @@
                     </div>
                     <div id="switch-log-list" class="log-list">
                         <div class="meta">暂无切换日志</div>
+                    </div>
+                </article>
+
+                <article class="card keepalive-card">
+                    <div class="card-top">
+                        <div>
+                            <h2 style="margin-bottom: 6px;">保号规则</h2>
+                            <div class="meta" id="keepalive-summary">规则读取中</div>
+                        </div>
+                        <div id="keepalive-pill" class="pill">加载中</div>
+                    </div>
+                    <div id="keepalive-list" class="keepalive-list">
+                        <div class="meta">暂无保号规则</div>
                     </div>
                 </article>
 
@@ -1267,6 +1366,37 @@
         </div>
     </div>
 
+    <div id="keepalive-overlay" class="overlay" aria-live="polite" aria-modal="true">
+        <div class="confirm-card">
+            <h2>保号设置</h2>
+            <p id="keepalive-subtitle">选择要保的 eSIM，设置发信目标和保活周期。</p>
+            <div class="keepalive-form">
+                <label>
+                    保号 eSIM
+                    <select id="keepalive-esim-select"></select>
+                </label>
+                <div class="keepalive-form-grid">
+                    <label>
+                        间隔天数
+                        <input id="keepalive-interval-input" type="number" min="1" step="1" value="1" />
+                    </label>
+                    <label>
+                        接收手机号
+                        <input id="keepalive-phone-input" type="text" placeholder="请输入短信接收号码" />
+                    </label>
+                </div>
+                <label>
+                    短信预览
+                    <textarea id="keepalive-preview" readonly></textarea>
+                </label>
+            </div>
+            <div class="confirm-actions">
+                <button id="keepalive-cancel-btn" class="secondary" type="button">取消</button>
+                <button id="keepalive-submit-btn" type="button">保存规则</button>
+            </div>
+        </div>
+    </div>
+
     <div id="auth-overlay" class="auth-overlay" aria-live="polite" aria-modal="true">
         <div class="auth-card">
             <h2>输入访问密码</h2>
@@ -1294,6 +1424,7 @@
     <script>
         const noticeEl = document.getElementById("notice");
         const syncEsimBtn = document.getElementById("sync-esim-btn");
+        const openKeepaliveBtn = document.getElementById("open-keepalive-btn");
         const syncSmsBtn = document.getElementById("sync-sms-btn");
         const prevPageBtn = document.getElementById("prev-page-btn");
         const nextPageBtn = document.getElementById("next-page-btn");
@@ -1338,6 +1469,17 @@
         const switchLockTarget = document.getElementById("switch-lock-target");
         const switchLogSummary = document.getElementById("switch-log-summary");
         const switchLogList = document.getElementById("switch-log-list");
+        const keepaliveOverlay = document.getElementById("keepalive-overlay");
+        const keepaliveSubtitle = document.getElementById("keepalive-subtitle");
+        const keepaliveEsimSelect = document.getElementById("keepalive-esim-select");
+        const keepaliveIntervalInput = document.getElementById("keepalive-interval-input");
+        const keepalivePhoneInput = document.getElementById("keepalive-phone-input");
+        const keepalivePreview = document.getElementById("keepalive-preview");
+        const keepaliveCancelBtn = document.getElementById("keepalive-cancel-btn");
+        const keepaliveSubmitBtn = document.getElementById("keepalive-submit-btn");
+        const keepaliveSummary = document.getElementById("keepalive-summary");
+        const keepalivePill = document.getElementById("keepalive-pill");
+        const keepaliveList = document.getElementById("keepalive-list");
 
         const smsState = {
             page: 1,
@@ -1364,6 +1506,15 @@
         };
         const authState = {
             authenticated: false,
+        };
+        const keepaliveState = {
+            items: [],
+            refreshTimer: null,
+            active: false,
+            editingSubId: null,
+            isSubmitting: false,
+            browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+            testingSubId: null,
         };
         const collabState = {
             socket: null,
@@ -1405,9 +1556,11 @@
             disconnectSmsEventStream();
             disconnectCollab();
             clearSwitchLockTimer();
+            clearKeepaliveRefresh();
             hideNameOverlay();
             closeSwitchConfirmOverlayForce();
             closeSwitchOverlayForce();
+            closeKeepaliveOverlayForce();
         }
 
         function hideAuthOverlay() {
@@ -1578,6 +1731,7 @@
             }
             renderEsimTable();
             renderSwitchConfirmOverlay();
+            renderKeepaliveFormOptions();
         }
 
         function renderEsimTable() {
@@ -1655,6 +1809,7 @@
             document.getElementById("esim-active").textContent = "-";
             document.getElementById("esim-sync-at").textContent = "-";
             displayNameFilter.innerHTML = '<option value="">全部名称</option>';
+            keepaliveEsimSelect.innerHTML = "";
             switchState.pendingDisplayName = null;
             const list = document.getElementById("esim-table-body");
             list.innerHTML = `<div class="meta">${message}</div>`;
@@ -1696,6 +1851,85 @@
             document.getElementById("sms-summary").textContent = "短信列表读取失败";
             const tbody = document.getElementById("sms-table-body");
             tbody.innerHTML = `<tr><td colspan="5" class="meta">${message}</td></tr>`;
+        }
+
+        function renderKeepalive(data) {
+            keepaliveState.items = data.items || [];
+            const enabledCount = keepaliveState.items.filter((item) => item.enabled).length;
+            keepalivePill.className = enabledCount ? "pill" : "pill warn";
+            keepalivePill.textContent = enabledCount ? `启用 ${enabledCount} 条` : "暂无启用规则";
+            keepaliveSummary.textContent = keepaliveState.items.length
+                ? `共 ${keepaliveState.items.length} 条规则，已启用 ${enabledCount} 条`
+                : "暂无保号规则";
+            keepaliveList.innerHTML = "";
+            if (!keepaliveState.items.length) {
+                keepaliveList.innerHTML = '<div class="meta">暂无保号规则</div>';
+                return;
+            }
+            for (const item of keepaliveState.items) {
+                const card = document.createElement("div");
+                card.className = "keepalive-item";
+                card.innerHTML = `
+                    <div class="keepalive-item-top">
+                        <div class="keepalive-item-name">${item.esim_display_name || "-"} · ${item.esim_carrier_name || "运营商未知"} · Sub ID ${item.esim_sub_id}</div>
+                        <div class="pill ${item.enabled ? "" : "warn"}">${formatKeepaliveStatus(item)}</div>
+                    </div>
+                    <div class="keepalive-item-meta">接收号码：${item.target_phone} · 每 ${item.interval_days} 天一次</div>
+                    <div class="keepalive-item-meta">执行时区：${item.timezone_name || "等待补全时区"} · 发送窗口：${item.window_start_hour ?? 9}:00-${item.window_end_hour ?? 19}:00</div>
+                    <div class="keepalive-item-meta">短信预览：${item.message_preview}</div>
+                    <div class="keepalive-item-status">下次执行：${formatLocalDateTime(item.next_run_at)} · 最近成功：${formatLocalDateTime(item.last_success_at)} · 最近尝试：${formatLocalDateTime(item.last_attempt_at)}</div>
+                    <div class="keepalive-item-status">${item.last_error ? `最近错误：${item.last_error}` : "最近无错误"}</div>
+                    <div class="keepalive-item-actions">
+                        <button class="secondary keepalive-edit-btn" type="button" data-sub-id="${item.esim_sub_id}">编辑</button>
+                        <button class="secondary keepalive-test-btn" type="button" data-sub-id="${item.esim_sub_id}" ${keepaliveState.testingSubId === item.esim_sub_id ? "disabled" : ""}>${keepaliveState.testingSubId === item.esim_sub_id ? "测试中..." : "测试"}</button>
+                        <button class="secondary keepalive-toggle-btn" type="button" data-sub-id="${item.esim_sub_id}" data-enabled="${item.enabled ? "1" : "0"}">${item.enabled ? "暂停" : "启用"}</button>
+                        <button class="ghost keepalive-delete-btn" type="button" data-sub-id="${item.esim_sub_id}">删除</button>
+                    </div>
+                `;
+                keepaliveList.appendChild(card);
+            }
+            keepaliveList.querySelectorAll(".keepalive-edit-btn").forEach((button) => {
+                button.addEventListener("click", () => openKeepaliveOverlay(button.dataset.subId));
+            });
+            keepaliveList.querySelectorAll(".keepalive-test-btn").forEach((button) => {
+                button.addEventListener("click", async () => {
+                    await testKeepaliveRule(button.dataset.subId);
+                });
+            });
+            keepaliveList.querySelectorAll(".keepalive-toggle-btn").forEach((button) => {
+                button.addEventListener("click", async () => {
+                    await toggleKeepaliveRule(button.dataset.subId, button.dataset.enabled === "1");
+                });
+            });
+            keepaliveList.querySelectorAll(".keepalive-delete-btn").forEach((button) => {
+                button.addEventListener("click", async () => {
+                    await deleteKeepaliveRule(button.dataset.subId);
+                });
+            });
+        }
+
+        function renderKeepaliveError(message) {
+            keepalivePill.className = "pill bad";
+            keepalivePill.textContent = "规则读取失败";
+            keepaliveSummary.textContent = message;
+            keepaliveList.innerHTML = `<div class="meta">${message}</div>`;
+        }
+
+        function formatKeepaliveStatus(item) {
+            switch (item.last_status) {
+                case "scheduled":
+                    return item.enabled ? "等待执行" : "未启用";
+                case "running":
+                    return "执行中";
+                case "succeeded":
+                    return "最近成功";
+                case "failed":
+                    return "最近失败";
+                case "waiting":
+                    return "等待重试";
+                default:
+                    return item.enabled ? "启用中" : "未启用";
+            }
         }
 
         function renderSwitchStatus(status) {
@@ -1896,6 +2130,18 @@
             }
         }
 
+        async function loadKeepaliveSection() {
+            try {
+                const rules = await fetchJson("/api/keepalive/rules");
+                renderKeepalive(rules);
+                renderKeepaliveFormOptions();
+                return { ok: true, data: rules };
+            } catch (error) {
+                renderKeepaliveError(`保号规则读取失败：${error.message}`);
+                return { ok: false, error: `保号规则读取失败：${error.message}` };
+            }
+        }
+
         async function loadSmsSection(page = smsState.page) {
             try {
                 const sms = await loadSmsPage(page);
@@ -1907,14 +2153,15 @@
         }
 
         async function loadDashboard() {
-            const [healthResult, esimResult, switchResult, monitorResult, smsResult] = await Promise.all([
+            const [healthResult, esimResult, switchResult, monitorResult, smsResult, keepaliveResult] = await Promise.all([
                 loadHealthSection(),
                 loadEsimSection(),
                 loadSwitchSection(),
                 loadMonitorSection(),
                 loadSmsSection(smsState.page),
+                loadKeepaliveSection(),
             ]);
-            const failures = [healthResult, esimResult, switchResult, monitorResult, smsResult]
+            const failures = [healthResult, esimResult, switchResult, monitorResult, smsResult, keepaliveResult]
                 .filter((result) => !result.ok)
                 .map((result) => result.error);
             if (failures.length) {
@@ -1931,6 +2178,7 @@
 
         function setInteractiveDisabled(disabled) {
             syncEsimBtn.disabled = disabled;
+            openKeepaliveBtn.disabled = disabled && !keepaliveState.active;
             syncSmsBtn.disabled = disabled;
             displayNameFilter.disabled = disabled;
             prevPageBtn.disabled = disabled || prevPageBtn.disabled;
@@ -1938,6 +2186,198 @@
             document.body.style.overflow = disabled ? "hidden" : "";
             renderEsimTable();
             renderSwitchConfirmOverlay();
+        }
+
+        function renderKeepaliveFormOptions() {
+            const subscriptions = (switchState.latestEsim?.subscriptions || []).filter((item) => item.is_embedded);
+            const currentValue = keepaliveEsimSelect.value || keepaliveState.editingSubId || subscriptions[0]?.sub_id || "";
+            keepaliveEsimSelect.innerHTML = subscriptions.map((item) => {
+                const label = `${item.display_name || "-"} · ${item.carrier_name || "运营商未知"} · Sub ID ${item.sub_id}`;
+                return `<option value="${item.sub_id}">${label}</option>`;
+            }).join("");
+            if (currentValue) {
+                keepaliveEsimSelect.value = currentValue;
+            }
+            updateKeepalivePreview();
+        }
+
+        function updateKeepalivePreview() {
+            const selectedSubId = keepaliveEsimSelect.value;
+            const selected = (switchState.latestEsim?.subscriptions || []).find((item) => item.sub_id === selectedSubId);
+            const name = selected?.display_name || "";
+            const pad = (value) => String(value).padStart(2, "0");
+            const now = new Date();
+            const dateText = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+            let preview = `保号 ${name} ${dateText}`.trim();
+            if (preview.length > 40) {
+                const available = 40 - "保号 ".length - ` ${dateText}`.length;
+                preview = `保号 ${name.slice(0, Math.max(0, available))} ${dateText}`.trim();
+            }
+            keepalivePreview.value = preview;
+        }
+
+        function openKeepaliveOverlay(subId = null) {
+            keepaliveState.active = true;
+            keepaliveState.editingSubId = subId;
+            renderKeepaliveFormOptions();
+            if (subId) {
+                const current = keepaliveState.items.find((item) => item.esim_sub_id === subId);
+                if (current) {
+                    keepaliveEsimSelect.value = current.esim_sub_id;
+                    keepaliveIntervalInput.value = String(current.interval_days);
+                    keepalivePhoneInput.value = current.target_phone;
+                    keepaliveSubtitle.textContent = `更新 ${current.esim_display_name || current.esim_sub_id} 的保号规则。当前将按 ${keepaliveState.browserTimezone || "浏览器时区"} 的 09:00-19:00 发送。`;
+                }
+            } else {
+                keepaliveIntervalInput.value = "1";
+                keepalivePhoneInput.value = "";
+                keepaliveSubtitle.textContent = `选择要保的 eSIM，设置发信目标和保活周期。发送窗口按当前浏览器时区 ${keepaliveState.browserTimezone || "-"} 的 09:00-19:00 计算。`;
+            }
+            updateKeepalivePreview();
+            keepaliveOverlay.classList.add("active");
+        }
+
+        function closeKeepaliveOverlay() {
+            if (keepaliveState.isSubmitting) {
+                return;
+            }
+            closeKeepaliveOverlayForce();
+        }
+
+        function closeKeepaliveOverlayForce() {
+            keepaliveOverlay.classList.remove("active");
+            keepaliveState.active = false;
+            keepaliveState.editingSubId = null;
+            keepaliveState.isSubmitting = false;
+            keepaliveSubmitBtn.textContent = "保存规则";
+            keepaliveSubmitBtn.disabled = false;
+            if (!switchState.active) {
+                setInteractiveDisabled(false);
+            }
+        }
+
+        async function saveKeepaliveRule() {
+            const subId = keepaliveEsimSelect.value;
+            const intervalDays = Number(keepaliveIntervalInput.value);
+            const targetPhone = keepalivePhoneInput.value.trim();
+            if (!subId || !Number.isInteger(intervalDays) || intervalDays < 1 || !targetPhone) {
+                setNotice("请完整填写保号规则", true);
+                return;
+            }
+            const selected = (switchState.latestEsim?.subscriptions || []).find((item) => item.sub_id === subId);
+            keepaliveState.isSubmitting = true;
+            keepaliveSubmitBtn.textContent = "保存中...";
+            keepaliveSubmitBtn.disabled = true;
+            try {
+                await fetchJson(`/api/keepalive/rules/${encodeURIComponent(subId)}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        display_name: selected?.display_name || null,
+                        carrier_name: selected?.carrier_name || null,
+                        timezone_name: keepaliveState.browserTimezone,
+                        target_phone: targetPhone,
+                        interval_days: intervalDays,
+                        enabled: true,
+                    }),
+                });
+                await loadKeepaliveSection();
+                setNotice("保号规则已保存");
+                closeKeepaliveOverlayForce();
+            } catch (error) {
+                setNotice(`保号规则保存失败：${error.message}`, true);
+            } finally {
+                keepaliveState.isSubmitting = false;
+                keepaliveSubmitBtn.textContent = "保存规则";
+                keepaliveSubmitBtn.disabled = false;
+            }
+        }
+
+        async function toggleKeepaliveRule(subId, currentlyEnabled) {
+            try {
+                await fetchJson(`/api/keepalive/rules/${encodeURIComponent(subId)}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled: !currentlyEnabled }),
+                });
+                await loadKeepaliveSection();
+                setNotice(`保号规则已${currentlyEnabled ? "暂停" : "启用"}`);
+            } catch (error) {
+                setNotice(`保号规则更新失败：${error.message}`, true);
+            }
+        }
+
+        async function deleteKeepaliveRule(subId) {
+            try {
+                await fetchJson(`/api/keepalive/rules/${encodeURIComponent(subId)}`, {
+                    method: "DELETE",
+                });
+                await loadKeepaliveSection();
+                setNotice("保号规则已删除");
+            } catch (error) {
+                setNotice(`保号规则删除失败：${error.message}`, true);
+            }
+        }
+
+        async function testKeepaliveRule(subId) {
+            const current = keepaliveState.items.find((item) => item.esim_sub_id === subId);
+            if (!current) {
+                setNotice("未找到保号规则", true);
+                return;
+            }
+            keepaliveState.testingSubId = subId;
+            renderKeepalive({ items: keepaliveState.items });
+            openSwitchOverlay();
+            switchOverlayTitle.textContent = "保号链路测试中";
+            switchOverlaySubtitle.textContent = `${current.esim_display_name || current.esim_sub_id} · 目标 ${current.target_phone}`;
+            switchStepList.innerHTML = "";
+            try {
+                await fetchJson(`/api/keepalive/rules/${encodeURIComponent(subId)}/test`, {
+                    method: "POST",
+                });
+                await Promise.all([
+                    loadKeepaliveSection(),
+                    loadEsimSection(),
+                    loadSwitchSection(),
+                ]);
+                setNotice("保号链路测试成功，已推进下次执行时间");
+            } catch (error) {
+                if ((error.message || "").includes("already running") || (error.message || "").includes("正在执行")) {
+                    setNotice("当前已有切换或保号任务正在执行，请稍后再试", true);
+                } else {
+                    setNotice(`保号链路测试失败：${error.message}`, true);
+                }
+                await Promise.all([
+                    loadKeepaliveSection(),
+                    loadSwitchSection(),
+                ]);
+            } finally {
+                keepaliveState.testingSubId = null;
+                if (keepaliveState.items.length) {
+                    renderKeepalive({ items: keepaliveState.items });
+                }
+            }
+        }
+
+        function scheduleKeepaliveRefresh() {
+            clearKeepaliveRefresh();
+            if (!authState.authenticated) {
+                return;
+            }
+            keepaliveState.refreshTimer = setInterval(async () => {
+                try {
+                    await loadKeepaliveSection();
+                } catch (_) {
+                    // Ignore periodic refresh failures and keep the last visible state.
+                }
+            }, 60000);
+        }
+
+        function clearKeepaliveRefresh() {
+            if (keepaliveState.refreshTimer) {
+                clearInterval(keepaliveState.refreshTimer);
+                keepaliveState.refreshTimer = null;
+            }
         }
 
         function renderSwitchTask(task) {
@@ -2370,9 +2810,13 @@
         }
 
         syncEsimBtn.addEventListener("click", () => runAction(syncEsimBtn, "/api/esim/sync", "eSIM 同步"));
+        openKeepaliveBtn.addEventListener("click", () => openKeepaliveOverlay());
         syncSmsBtn.addEventListener("click", () => runAction(syncSmsBtn, "/api/sms/sync-all", "历史短信全量同步"));
         switchConfirmCancel.addEventListener("click", closeSwitchConfirmOverlay);
         switchOverlayClose.addEventListener("click", closeSwitchOverlay);
+        keepaliveCancelBtn.addEventListener("click", closeKeepaliveOverlay);
+        keepaliveSubmitBtn.addEventListener("click", saveKeepaliveRule);
+        keepaliveEsimSelect.addEventListener("change", updateKeepalivePreview);
         switchConfirmSubmit.addEventListener("click", async () => {
             await startEsimSwitch(switchState.pendingDisplayName, getSelectedLockMinutes());
         });
@@ -2443,6 +2887,7 @@
                     ensureSwitchEventStream();
                     ensureSmsEventStream();
                     ensureCollabConnection();
+                    scheduleKeepaliveRefresh();
                     await loadDashboard();
                 }
             } catch (error) {
@@ -2495,6 +2940,7 @@
                 ensureSwitchEventStream();
                 ensureSmsEventStream();
                 ensureCollabConnection();
+                scheduleKeepaliveRefresh();
                 await loadDashboard();
             } catch (_) {
                 showAuthOverlay();

@@ -111,6 +111,47 @@ class EsimSwitchRequest(BaseModel):
     lock_minutes: Literal[10, 20, 30]
 
 
+class KeepaliveRuleOut(BaseModel):
+    esim_sub_id: str
+    esim_display_name: str | None = None
+    esim_carrier_name: str | None = None
+    timezone_name: str | None = None
+    window_start_hour: int = 9
+    window_end_hour: int = 19
+    target_phone: str
+    interval_days: int
+    enabled: bool
+    message_preview: str
+    last_attempt_at: str | None = None
+    last_success_at: str | None = None
+    next_run_at: str | None = None
+    retry_after_at: str | None = None
+    last_status: Literal["idle", "scheduled", "running", "succeeded", "failed", "waiting"]
+    last_error: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class KeepaliveRuleListResponse(BaseModel):
+    items: list[KeepaliveRuleOut] = Field(default_factory=list)
+
+
+class KeepaliveRuleUpsertRequest(BaseModel):
+    display_name: str | None = None
+    carrier_name: str | None = None
+    timezone_name: str = Field(min_length=1)
+    target_phone: str = Field(min_length=1)
+    interval_days: int = Field(ge=1)
+    enabled: bool = True
+
+
+class KeepaliveRulePatchRequest(BaseModel):
+    timezone_name: str | None = Field(default=None, min_length=1)
+    target_phone: str | None = Field(default=None, min_length=1)
+    interval_days: int | None = Field(default=None, ge=1)
+    enabled: bool | None = None
+
+
 class EsimSwitchLogEntryOut(BaseModel):
     event_type: Literal["attempt_started", "blocked_running", "blocked_locked", "succeeded", "failed"]
     display_name: str | None = None

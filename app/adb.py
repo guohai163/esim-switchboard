@@ -5,6 +5,7 @@ import shlex
 import re
 import subprocess
 from datetime import datetime, timezone
+from typing import Any
 
 from app.config import AppConfig
 from app.models import EsimSnapshotRecord, EsimSubscriptionRecord, SmsMessageRecord
@@ -153,6 +154,14 @@ class AdbClient:
             )
         except FileNotFoundError as exc:
             raise AdbCommandError(command, f"ADB executable not found: {self.config.adb_path}") from exc
+
+    def send_sms_via_ui(self, target_phone: str, message: str, device: Any) -> None:
+        command = (
+            "am start -a android.intent.action.SENDTO "
+            f"-d sms:{shlex.quote(target_phone)} "
+            f'--es sms_body {shlex.quote(message)}'
+        )
+        device.shell(command)
 
 
 def parse_isub_output(output: str) -> EsimSnapshotRecord:
