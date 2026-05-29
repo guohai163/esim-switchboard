@@ -305,8 +305,6 @@ class KeepaliveService:
                 {"textContains": target_phone},
             ],
         )
-        if phone_field is None:
-            raise RuntimeError("未找到短信接收号码输入区域")
 
         message_field = self._find_first_existing_selector(
             device,
@@ -319,15 +317,30 @@ class KeepaliveService:
         if message_field is None:
             raise RuntimeError("未找到短信内容输入框")
 
+        # 某些短信应用会直接打开既有会话页，此时不会再展示收件人输入框。
+        # 只要消息输入框已经就绪，就继续尝试点击发送按钮。
+        if phone_field is None:
+            self._record_keepalive_send_step("未找到独立收件人输入框，按既有会话页继续发送")
+
         send_button = self._find_first_existing_selector(
             device,
             [{"text": label} for label in self.config.sms_send_button_labels]
             + [{"description": label} for label in self.config.sms_send_button_labels]
+            + [{"textContains": label} for label in self.config.sms_send_button_labels]
+            + [{"descriptionContains": label} for label in self.config.sms_send_button_labels]
             + [{"resourceIdMatches": ".*send.*"}],
         )
         if send_button is None:
             raise RuntimeError("未找到发送按钮")
         send_button.click()
+        self._record_keepalive_send_step("已点击短信发送按钮")
+
+    def _record_keepalive_send_step(self, detail: str) -> None:
+        """Mirror the SMS send stage into the switch overlay so keepalive tests are observable."""
+
+        record_step = getattr(self.switch_service, "_record_step", None)
+        if callable(record_step):
+            record_step("send_sms", "发送保号短信", "succeeded", detail)
 
     def _mark_rule_failed(self, esim_sub_id: str, message: str) -> None:
         now_iso = utc_now_iso()

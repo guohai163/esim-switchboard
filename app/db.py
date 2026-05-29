@@ -52,6 +52,7 @@ class Database:
                     body TEXT,
                     sub_id TEXT,
                     date_ts INTEGER,
+                    raw_row TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -94,6 +95,7 @@ class Database:
                 """
             )
             self._ensure_app_state_schema(conn)
+            self._ensure_column(conn, "sms_messages", "raw_row", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(conn, "keepalive_rules", "timezone_name", "TEXT")
             self._ensure_column(conn, "keepalive_rules", "window_start_hour", "INTEGER NOT NULL DEFAULT 9")
             self._ensure_column(conn, "keepalive_rules", "window_end_hour", "INTEGER NOT NULL DEFAULT 19")
@@ -201,33 +203,36 @@ class Database:
                     (item.sms_id,),
                 ).fetchone()
                 cursor = conn.execute(
-                    """
-                    INSERT INTO sms_messages (
-                        sms_id,
-                        address,
-                        body,
-                        sub_id,
-                        date_ts,
-                        created_at,
-                        updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(sms_id) DO UPDATE SET
-                        address = excluded.address,
-                        body = excluded.body,
-                        sub_id = excluded.sub_id,
-                        date_ts = excluded.date_ts,
-                        updated_at = excluded.updated_at
-                    """,
-                    (
-                        item.sms_id,
-                        item.address,
-                        item.body,
-                        item.sub_id,
-                        item.date_ts,
-                        created_at,
-                        updated_at,
-                    ),
-                )
+                """
+                INSERT INTO sms_messages (
+                    sms_id,
+                    address,
+                    body,
+                    sub_id,
+                    date_ts,
+                    raw_row,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(sms_id) DO UPDATE SET
+                    address = excluded.address,
+                    body = excluded.body,
+                    sub_id = excluded.sub_id,
+                    date_ts = excluded.date_ts,
+                    raw_row = excluded.raw_row,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    item.sms_id,
+                    item.address,
+                    item.body,
+                    item.sub_id,
+                    item.date_ts,
+                    item.raw_row,
+                    created_at,
+                    updated_at,
+                ),
+            )
                 if cursor.rowcount <= 0:
                     duplicate_count += 1
                 elif existing is None:
@@ -397,7 +402,7 @@ class Database:
                     last_error,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, NULL, ?, ?)
                 ON CONFLICT(esim_sub_id) DO UPDATE SET
                     esim_display_name = excluded.esim_display_name,
                     esim_carrier_name = excluded.esim_carrier_name,

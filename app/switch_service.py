@@ -198,6 +198,23 @@ class EsimSwitchService:
         task_dir = self.config.switch_screenshot_dir / task_id
         task_dir.mkdir(parents=True, exist_ok=True)
         try:
+            already_active_detail = self._get_already_active_target_detail(display_name)
+            if already_active_detail is not None:
+                self._record_step(
+                    "check_active_esim",
+                    "检查当前激活 eSIM",
+                    "succeeded",
+                    already_active_detail,
+                )
+                # 保号链路即使无需切卡，也要保持和正常路径一致的解锁前置条件，
+                # 这样后续短信发送仍可直接复用同一台已唤醒、已解锁的设备。
+                device = self._connect_device()
+                device.screen_on()
+                self._capture_step(task_id, task_dir, "screen_on", "点亮屏幕", "succeeded", "屏幕已点亮", device)
+                self._ensure_unlocked(device, task_id, task_dir)
+                self._finish_keepalive_task("succeeded", None)
+                return
+
             device = self._connect_device()
             device.screen_on()
             self._capture_step(task_id, task_dir, "screen_on", "点亮屏幕", "succeeded", "屏幕已点亮", device)
@@ -231,6 +248,18 @@ class EsimSwitchService:
         task_dir = self.config.switch_screenshot_dir / task_id
         task_dir.mkdir(parents=True, exist_ok=True)
         try:
+            # 目标 eSIM 已经处于激活态时，不再进入设置页点击开关，避免误触发“停用当前 eSIM”弹窗。
+            already_active_detail = self._get_already_active_target_detail(display_name)
+            if already_active_detail is not None:
+                self._record_step(
+                    "check_active_esim",
+                    "检查当前激活 eSIM",
+                    "succeeded",
+                    already_active_detail,
+                )
+                self._finish_task("succeeded", None)
+                return
+
             device = self._connect_device()
             device.screen_on()
             self._capture_step(task_id, task_dir, "screen_on", "点亮屏幕", "succeeded", "屏幕已点亮", device)
@@ -387,23 +416,15 @@ class EsimSwitchService:
                 event_name = "task_failed"
             self._notify_locked(event_name, self._serialize_task(self._task))
 
-    def _capture_step(
+    def _record_step(
         self,
-        task_id: str,
-        task_dir: Path,
         step_key: str,
         title: str,
         status: SwitchStepStatus,
         detail: str,
-        device: Any,
+        screenshot_url: str | None = None,
     ) -> None:
         timestamp = utc_now_iso()
-        with self._lock:
-            filename = f"{len(self._task.steps) + 1:02d}_{step_key}.png"
-        file_path = task_dir / filename
-        image = device.screenshot(format="pillow")
-        image.save(file_path)
-        screenshot_url = f"/switch-screenshots/{task_id}/{filename}"
         step = SwitchStep(
             step_key=step_key,
             title=title,
@@ -417,6 +438,34 @@ class EsimSwitchService:
             self._task.latest_screenshot_url = screenshot_url
             self._task.steps.append(step)
             self._notify_locked("step", self._serialize_task(self._task))
+
+    def _capture_step(
+        self,
+        task_id: str,
+        task_dir: Path,
+        step_key: str,
+        title: str,
+        status: SwitchStepStatus,
+        detail: str,
+        device: Any,
+    ) -> None:
+        with self._lock:
+            filename = f"{len(self._task.steps) + 1:02d}_{step_key}.png"
+        file_path = task_dir / filename
+        image = device.screenshot(format="pillow")
+        self._save_optimized_screenshot(image, file_path)
+        screenshot_url = f"/switch-screenshots/{task_id}/{filename}"
+        self._record_step(step_key, title, status, detail, screenshot_url)
+
+    def _save_optimized_screenshot(self, image: Any, file_path: Path) -> None:
+        """Shrink step screenshots before saving so the browser can keep up with rapid step updates."""
+
+        if hasattr(image, "thumbnail"):
+            image.thumbnail((720, 1280))
+        try:
+            image.save(file_path, format="PNG", optimize=True, compress_level=9)
+        except TypeError:
+            image.save(file_path, format="PNG")
 
     def _connect_device(self) -> Any:
         if self.config.adb_device_serial:
@@ -461,6 +510,46 @@ class EsimSwitchService:
             return
 
         self._click_first_match(device, self.config.esim_confirm_label)
+
+    def _get_already_active_target_detail(self, display_name: str) -> str | None:
+        """Best-effort check to skip the UI flow when the target eSIM is already active."""
+
+        try:
+            self.esim_service.sync()
+        except Exception:  # noqa: BLE001
+            pass
+
+        snapshot_active_names: list[str] = []
+        try:
+            latest_snapshot = self.esim_service.latest()
+        except Exception:  # noqa: BLE001
+            latest_snapshot = {}
+        else:
+            snapshot_active_names = [
+                item.get("display_name")
+                for item in latest_snapshot.get("subscriptions", [])
+                if item.get("is_active") and item.get("display_name")
+            ]
+
+        dumpsys_active_names: list[str] = []
+        adb_client = getattr(self.esim_service, "adb_client", None)
+        if adb_client is not None and hasattr(adb_client, "read_isub"):
+            try:
+                parsed_snapshot = parse_isub_output(adb_client.read_isub())
+            except Exception:  # noqa: BLE001
+                parsed_snapshot = None
+            if parsed_snapshot is not None:
+                dumpsys_active_names = [
+                    item.display_name
+                    for item in parsed_snapshot.subscriptions
+                    if item.is_active and item.display_name
+                ]
+
+        if display_name in dumpsys_active_names:
+            return f"目标 eSIM {display_name} 已经是当前激活卡，已跳过实际切换（dumpsys isub 已确认）"
+        if display_name in snapshot_active_names:
+            return f"目标 eSIM {display_name} 已经是当前激活卡，已跳过实际切换（本地快照已确认）"
+        return None
 
     def _wait_and_verify_switch(self, device: Any, task_id: str, task_dir: Path, display_name: str) -> str:
         time.sleep(self.config.switch_confirm_wait_seconds)

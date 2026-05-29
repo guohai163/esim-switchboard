@@ -359,6 +359,28 @@ def test_database_upsert_sms_deduplicates(tmp_path: Path) -> None:
     assert second_duplicates == 1
 
 
+def test_database_upsert_sms_persists_raw_row(tmp_path: Path) -> None:
+    db = Database(tmp_path / "db.sqlite")
+    db.init_schema()
+    message = SmsMessageRecord(
+        sms_id="42",
+        address="10010",
+        body="hello",
+        sub_id="7",
+        date_ts=1716680000000,
+        raw_row="Row: 0 address=10010, body=hello, sub_id=7, _id=42, date=1716680000000",
+    )
+
+    inserted, duplicates = db.upsert_sms_messages([message], "2026-05-29T00:00:00+00:00", "2026-05-29T00:00:00+00:00")
+
+    assert inserted == 1
+    assert duplicates == 0
+    with db._connect() as conn:  # noqa: SLF001
+        row = conn.execute("SELECT raw_row FROM sms_messages WHERE sms_id = ?", ("42",)).fetchone()
+    assert row is not None
+    assert row["raw_row"] == message.raw_row
+
+
 def test_database_migrates_legacy_app_state_schema(tmp_path: Path) -> None:
     import sqlite3
 
@@ -422,6 +444,32 @@ def test_keepalive_database_rule_roundtrip(tmp_path: Path) -> None:
     assert patched["enabled"] is False
     assert listed[0]["esim_sub_id"] == "5"
     assert deleted is True
+
+
+def test_keepalive_database_rule_insert_accepts_full_payload(tmp_path: Path) -> None:
+    db = Database(tmp_path / "db.sqlite")
+    db.init_schema()
+
+    created = db.upsert_keepalive_rule(
+        "7",
+        esim_display_name="gg+4407719752845",
+        esim_carrier_name="只能拨打紧急呼救电话",
+        timezone_name="Asia/Shanghai",
+        window_start_hour=9,
+        window_end_hour=19,
+        target_phone="+8518500050982",
+        interval_days=90,
+        enabled=True,
+        message_preview="保号 gg+4407719752845 2026-05-29",
+        next_run_at="2026-08-27T00:00:00+00:00",
+        last_status="scheduled",
+        updated_at="2026-05-29T00:00:00+00:00",
+    )
+
+    assert created["esim_sub_id"] == "7"
+    assert created["target_phone"] == "+8518500050982"
+    assert created["interval_days"] == 90
+    assert created["last_error"] is None
 
 
 def test_keepalive_message_preview_truncates_to_40_chars(tmp_path: Path) -> None:
@@ -500,6 +548,88 @@ def test_keepalive_defers_to_next_day_window_start_after_7pm(tmp_path: Path) -> 
 
     assert inside_window is False
     assert deferred_run_at == "2026-05-30T01:00:00+00:00"
+
+
+def test_keepalive_send_sms_clicks_button_when_label_is_sms(tmp_path: Path) -> None:
+    class FakeSelector:
+        def __init__(self, exists: bool, recorder: list[tuple], selector_kwargs: dict) -> None:
+            self.exists = exists
+            self.recorder = recorder
+            self.selector_kwargs = selector_kwargs
+
+        def click(self) -> None:
+            self.recorder.append(("click", self.selector_kwargs))
+
+    class FakeDevice:
+        def __init__(self) -> None:
+            self.recorder: list[tuple] = []
+
+        def __call__(self, **kwargs):  # noqa: ANN003
+            if kwargs.get("resourceIdMatches") == ".*recipient.*":
+                return FakeSelector(True, self.recorder, kwargs)
+            if kwargs.get("resourceIdMatches") == ".*compose_message_text.*":
+                return FakeSelector(True, self.recorder, kwargs)
+            if kwargs.get("text") == "短信":
+                return FakeSelector(True, self.recorder, kwargs)
+            return FakeSelector(False, self.recorder, kwargs)
+
+    class FakeAdb:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def send_sms_via_ui(self, target_phone: str, message: str, device):  # noqa: ANN001
+            self.calls.append((target_phone, message))
+
+    config, services = make_test_services(tmp_path)
+    config.switch_step_delay_seconds = 0
+    fake_switch = FakeSwitchService()
+    keepalive = KeepaliveService(config, services.db, services.esim_service, fake_switch, FakeAdb())
+    device = FakeDevice()
+
+    keepalive._send_sms(device, "+8518500050982", "保号 gg+4407719752845 2026-05-29")
+
+    assert ("click", {"text": "短信"}) in device.recorder
+
+
+def test_keepalive_send_sms_allows_existing_thread_without_recipient_field(tmp_path: Path) -> None:
+    class FakeSelector:
+        def __init__(self, exists: bool, recorder: list[tuple], selector_kwargs: dict) -> None:
+            self.exists = exists
+            self.recorder = recorder
+            self.selector_kwargs = selector_kwargs
+
+        def click(self) -> None:
+            self.recorder.append(("click", self.selector_kwargs))
+
+    class FakeDevice:
+        def __init__(self) -> None:
+            self.recorder: list[tuple] = []
+
+        def __call__(self, **kwargs):  # noqa: ANN003
+            if kwargs.get("resourceIdMatches") == ".*recipient.*":
+                return FakeSelector(False, self.recorder, kwargs)
+            if kwargs.get("resourceIdMatches") == ".*compose_message_text.*":
+                return FakeSelector(True, self.recorder, kwargs)
+            if kwargs.get("text") == "短信":
+                return FakeSelector(True, self.recorder, kwargs)
+            return FakeSelector(False, self.recorder, kwargs)
+
+    class FakeAdb:
+        def send_sms_via_ui(self, target_phone: str, message: str, device):  # noqa: ANN001, ARG002
+            return None
+
+    config, services = make_test_services(tmp_path)
+    config.switch_step_delay_seconds = 0
+    fake_switch = FakeSwitchService()
+    keepalive = KeepaliveService(config, services.db, services.esim_service, fake_switch, FakeAdb())
+    recorded_steps: list[tuple] = []
+    fake_switch._record_step = lambda step_key, title, status, detail: recorded_steps.append((step_key, title, status, detail))  # type: ignore[attr-defined]
+    device = FakeDevice()
+
+    keepalive._send_sms(device, "+8618500050982", "保号 gg+4407719752845 2026-05-29")
+
+    assert ("click", {"text": "短信"}) in device.recorder
+    assert any(step[0] == "send_sms" and "既有会话页继续发送" in step[3] for step in recorded_steps)
 
 
 def test_api_endpoints_return_dashboard_data(tmp_path: Path) -> None:
@@ -1187,6 +1317,166 @@ def test_switch_service_waits_then_verifies_switch(tmp_path: Path) -> None:
 
     assert "dumpsys isub 确认成功" in detail
     assert "Club+85264220597" in detail
+
+
+def test_switch_service_saves_optimized_jpeg_screenshots(tmp_path: Path) -> None:
+    from app.switch_service import EsimSwitchService
+
+    class FakeImage:
+        def __init__(self) -> None:
+            self.thumbnail_calls: list[tuple[int, int]] = []
+            self.convert_calls: list[str] = []
+            self.save_calls: list[tuple] = []
+            self.mode = "RGBA"
+
+        def thumbnail(self, size: tuple[int, int]) -> None:
+            self.thumbnail_calls.append(size)
+
+        def convert(self, mode: str):  # noqa: ANN001
+            self.convert_calls.append(mode)
+            self.mode = mode
+            return self
+
+        def save(self, path, **kwargs):  # noqa: ANN001
+            self.save_calls.append((str(path), kwargs))
+
+    class FakeEsimSyncService:
+        def sync(self) -> dict:
+            return {"ok": True}
+
+    config = AppConfig.from_env(tmp_path)
+    service = EsimSwitchService(config, FakeEsimSyncService())  # type: ignore[arg-type]
+    image = FakeImage()
+
+    service._save_optimized_screenshot(image, tmp_path / "shot.png")
+
+    assert image.thumbnail_calls == [(720, 1280)]
+    assert image.convert_calls == []
+    assert image.save_calls
+    assert image.save_calls[0][0].endswith("shot.png")
+    assert image.save_calls[0][1]["format"] == "PNG"
+    assert image.save_calls[0][1]["compress_level"] == 9
+
+
+def test_switch_service_short_circuits_when_target_already_active(tmp_path: Path) -> None:
+    from app.switch_service import EsimSwitchService
+
+    class FakeEsimSyncService:
+        def sync(self) -> dict:
+            return {"ok": True}
+
+        def latest(self) -> dict:
+            return {
+                "subscriptions": [
+                    {"display_name": "gg+4407719752845", "is_active": True},
+                    {"display_name": "Club", "is_active": False},
+                ]
+            }
+
+        @property
+        def adb_client(self):  # noqa: ANN201
+            class _FakeAdb:
+                @staticmethod
+                def read_isub() -> str:
+                    return """
+                    ActiveSubInfoList:
+                     {id=7 simSlotIndex=1 displayName=gg+4407719752845 carrierName=giffgaff isEmbedded=true}
+                    ++++++++++++++++++++++++++++++++
+                    AllSubInfoList:
+                     {id=5 simSlotIndex=-1 displayName=Club carrierName=没有服务 isEmbedded=true}
+                     {id=7 simSlotIndex=1 displayName=gg+4407719752845 carrierName=giffgaff isEmbedded=true}
+                    ++++++++++++++++++++++++++++++++
+                    """
+
+            return _FakeAdb()
+
+    config = AppConfig.from_env(tmp_path)
+    service = EsimSwitchService(config, FakeEsimSyncService())  # type: ignore[arg-type]
+    service._task.task_id = "task-short"
+    service._task.status = "running"
+    service._task.target_display_name = "gg+4407719752845"
+    service._task.requested_lock_minutes = 10
+    service._task.started_at = "2026-05-29T00:00:00+00:00"
+
+    service._connect_device = lambda: (_ for _ in ()).throw(AssertionError("should not connect device"))  # type: ignore[method-assign]
+
+    service._run_switch_flow("task-short", "gg+4407719752845")
+
+    status = service.get_status()
+    assert status["status"] == "succeeded"
+    assert status["steps"][0]["step_key"] == "check_active_esim"
+    assert "已经是当前激活卡" in status["steps"][0]["detail"]
+
+
+def test_keepalive_switch_short_circuits_when_target_already_active(tmp_path: Path) -> None:
+    from app.switch_service import EsimSwitchService
+
+    class FakeDevice:
+        def __init__(self) -> None:
+            self.calls: list[tuple] = []
+
+        def screen_on(self) -> None:
+            self.calls.append(("screen_on",))
+
+        def unlock(self) -> None:
+            self.calls.append(("unlock",))
+
+        def swipe_ext(self, direction: str, scale: float = 0.9) -> None:
+            self.calls.append(("swipe_ext", direction, scale))
+
+        def screenshot(self, format: str = "pillow"):  # noqa: A002
+            from PIL import Image
+
+            self.calls.append(("screenshot", format))
+            return Image.new("RGB", (10, 10), color="white")
+
+    class FakeEsimSyncService:
+        def sync(self) -> dict:
+            return {"ok": True}
+
+        def latest(self) -> dict:
+            return {
+                "subscriptions": [
+                    {"display_name": "gg+4407719752845", "is_active": True},
+                ]
+            }
+
+        @property
+        def adb_client(self):  # noqa: ANN201
+            class _FakeAdb:
+                @staticmethod
+                def read_isub() -> str:
+                    return """
+                    ActiveSubInfoList:
+                     {id=7 simSlotIndex=1 displayName=gg+4407719752845 carrierName=giffgaff isEmbedded=true}
+                    ++++++++++++++++++++++++++++++++
+                    AllSubInfoList:
+                     {id=7 simSlotIndex=1 displayName=gg+4407719752845 carrierName=giffgaff isEmbedded=true}
+                    ++++++++++++++++++++++++++++++++
+                    """
+
+            return _FakeAdb()
+
+    config = AppConfig.from_env(tmp_path)
+    service = EsimSwitchService(config, FakeEsimSyncService())  # type: ignore[arg-type]
+    config.switch_step_delay_seconds = 0
+    service._task.task_id = "task-keepalive-short"
+    service._task.status = "running"
+    service._task.target_display_name = "gg+4407719752845"
+    service._task.started_at = "2026-05-29T00:00:00+00:00"
+    fake_device = FakeDevice()
+    service._connect_device = lambda: fake_device  # type: ignore[method-assign]
+
+    service._run_keepalive_flow("task-keepalive-short", "gg+4407719752845")
+
+    status = service.get_status()
+    assert status["status"] == "succeeded"
+    assert status["steps"][0]["step_key"] == "check_active_esim"
+    assert status["steps"][1]["step_key"] == "screen_on"
+    assert status["steps"][2]["step_key"] == "unlock_screen"
+    assert "已经是当前激活卡" in status["steps"][0]["detail"]
+    assert ("screen_on",) in fake_device.calls
+    assert ("unlock",) in fake_device.calls
 
 
 def test_switch_service_persists_lock_and_logs_after_success(tmp_path: Path) -> None:
