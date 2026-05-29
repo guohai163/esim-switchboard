@@ -818,7 +818,7 @@
 
         .switch-grid {
             display: grid;
-            grid-template-columns: 1.2fr 0.8fr;
+            grid-template-columns: 1fr 0.95fr;
             gap: 18px;
         }
 
@@ -828,10 +828,13 @@
             border: 1px solid rgba(15, 118, 110, 0.12);
             padding: 14px;
             min-height: 280px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
         }
 
         .switch-preview img {
-            width: 100%;
+            width: min(100%, 420px);
             display: block;
             border-radius: 8px;
             background: white;
@@ -852,6 +855,24 @@
         .switch-steps li {
             margin-bottom: 12px;
             color: var(--text);
+        }
+
+        .switch-steps li.replayable {
+            cursor: pointer;
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-left: -10px;
+            margin-right: -10px;
+            transition: background 140ms ease, box-shadow 140ms ease;
+        }
+
+        .switch-steps li.replayable:hover {
+            background: rgba(15, 118, 110, 0.06);
+        }
+
+        .switch-steps li.active {
+            background: rgba(15, 118, 110, 0.12);
+            box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.14);
         }
 
         .switch-steps small {
@@ -1158,19 +1179,6 @@
                     </div>
                 </article>
 
-                <article class="card keepalive-card">
-                    <div class="card-top">
-                        <div>
-                            <h2 style="margin-bottom: 6px;">保号规则</h2>
-                            <div class="meta" id="keepalive-summary">规则读取中</div>
-                        </div>
-                        <div id="keepalive-pill" class="pill">加载中</div>
-                    </div>
-                    <div id="keepalive-list" class="keepalive-list">
-                        <div class="meta">暂无保号规则</div>
-                    </div>
-                </article>
-
                 <article class="card sms-card">
                     <div class="toolbar">
                         <div>
@@ -1206,6 +1214,19 @@
                         </div>
                     </div>
                     <div class="notice" id="notice"></div>
+                </article>
+
+                <article class="card keepalive-card">
+                    <div class="card-top">
+                        <div>
+                            <h2 style="margin-bottom: 6px;">保号规则</h2>
+                            <div class="meta" id="keepalive-summary">规则读取中</div>
+                        </div>
+                        <div id="keepalive-pill" class="pill">加载中</div>
+                    </div>
+                    <div id="keepalive-list" class="keepalive-list">
+                        <div class="meta">暂无保号规则</div>
+                    </div>
                 </article>
             </main>
 
@@ -1493,8 +1514,10 @@
             confirmActive: false,
             task: null,
             lockTimer: null,
+            pollTimer: null,
             latestEsim: null,
             pendingDisplayName: null,
+            selectedReplayStepKey: null,
             isSubmittingConfirm: false,
         };
         const smsEventState = {
@@ -1934,11 +1957,15 @@
 
         function renderSwitchStatus(status) {
             const priorTask = switchState.task;
+            if (priorTask?.task_id && status.task_id && priorTask.task_id !== status.task_id) {
+                switchState.selectedReplayStepKey = null;
+            }
             switchState.task = status;
             renderSwitchLockCard(status);
             renderEsimTable();
             renderSwitchConfirmOverlay();
             scheduleSwitchLockRefresh(status);
+            scheduleSwitchStatusPolling(status);
 
             if (status.status === "running" && switchState.confirmActive) {
                 closeSwitchConfirmOverlayForce();
@@ -2392,21 +2419,31 @@
                     ? `${task.target_display_name} · ${task.current_step || "等待下一步"}`
                     : "等待任务开始...";
             }
+            const done = task.status === "failed" || task.status === "succeeded";
             switchStepList.innerHTML = "";
             for (const step of task.steps || []) {
                 const li = document.createElement("li");
+                const replayable = done && Boolean(step.screenshot_url);
+                const active = replayable && switchState.selectedReplayStepKey === step.step_key;
+                li.className = [replayable ? "replayable" : "", active ? "active" : ""].filter(Boolean).join(" ");
                 li.innerHTML = `
                     <strong>${step.title}</strong>
                     <small>${formatLocalDateTime(step.timestamp)}${step.detail ? ` · ${step.detail}` : ""}</small>
                 `;
+                if (replayable) {
+                    li.addEventListener("click", () => {
+                        switchState.selectedReplayStepKey = step.step_key;
+                        renderSwitchTask(switchState.task);
+                    });
+                }
                 switchStepList.appendChild(li);
             }
-            if (task.latest_screenshot_url) {
-                switchPreviewImage.src = `${task.latest_screenshot_url}?t=${Date.now()}`;
+            const previewUrl = getSwitchPreviewUrl(task, done);
+            if (previewUrl) {
+                switchPreviewImage.src = `${previewUrl}?t=${Date.now()}`;
             } else {
                 switchPreviewImage.removeAttribute("src");
             }
-            const done = task.status === "failed" || task.status === "succeeded";
             switchOverlayClose.disabled = !done;
             if (done) {
                 setInteractiveDisabled(false);
@@ -2418,12 +2455,32 @@
             }
         }
 
+        function getSwitchPreviewUrl(task, done) {
+            if (!task) {
+                return null;
+            }
+            if (!done) {
+                return task.latest_screenshot_url || null;
+            }
+            if (switchState.selectedReplayStepKey) {
+                const selectedStep = (task.steps || []).find(
+                    (step) => step.step_key === switchState.selectedReplayStepKey && step.screenshot_url,
+                );
+                if (selectedStep) {
+                    return selectedStep.screenshot_url;
+                }
+            }
+            const lastStepWithScreenshot = [...(task.steps || [])].reverse().find((step) => step.screenshot_url);
+            return lastStepWithScreenshot?.screenshot_url || task.latest_screenshot_url || null;
+        }
+
         function openSwitchOverlay() {
             switchConfirmOverlay.classList.remove("active");
             switchState.confirmActive = false;
             switchOverlay.classList.add("active");
             setInteractiveDisabled(true);
             switchState.active = true;
+            scheduleSwitchStatusPolling();
         }
 
         function closeSwitchOverlay() {
@@ -2437,6 +2494,8 @@
             switchOverlay.classList.remove("active");
             switchState.active = false;
             switchOverlayClose.disabled = true;
+            switchState.selectedReplayStepKey = null;
+            clearSwitchStatusPolling();
             setInteractiveDisabled(false);
         }
 
@@ -2486,6 +2545,40 @@
                 switchState.eventSource.close();
                 switchState.eventSource = null;
             }
+        }
+
+        function clearSwitchStatusPolling() {
+            if (switchState.pollTimer) {
+                clearInterval(switchState.pollTimer);
+                switchState.pollTimer = null;
+            }
+        }
+
+        function scheduleSwitchStatusPolling(status = switchState.task) {
+            if (!authState.authenticated || !switchState.active) {
+                clearSwitchStatusPolling();
+                return;
+            }
+            if (!status || status.status !== "running") {
+                clearSwitchStatusPolling();
+                return;
+            }
+            if (switchState.pollTimer) {
+                return;
+            }
+            switchState.pollTimer = setInterval(async () => {
+                try {
+                    const result = await loadSwitchSection();
+                    if (!result.ok) {
+                        return;
+                    }
+                    if (result.data?.status !== "running") {
+                        clearSwitchStatusPolling();
+                    }
+                } catch (_) {
+                    // Ignore polling failures here; SSE may still recover on the next event.
+                }
+            }, 1000);
         }
 
         function disconnectSmsEventStream() {

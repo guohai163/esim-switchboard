@@ -104,7 +104,7 @@ class AppConfig:
             esim_toggle_label=("使用 SIM 卡", "启用", "开启", "Use SIM", "Turn on SIM"),
             esim_confirm_label=("是", "开启", "确定", "继续", "OK"),
             sms_compose_package=os.getenv("SMS_COMPOSE_PACKAGE", "com.google.android.apps.messaging"),
-            sms_send_button_labels=("发送", "Send", "发送 SMS", "发送短信"),
+            sms_send_button_labels=("发送", "短信", "Send", "发送 SMS", "发送短信", "Message"),
             app_password=app_password,
             app_auth_cookie_name=app_auth_cookie_name,
             app_auth_cookie_value=app_auth_cookie_value,
