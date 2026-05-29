@@ -93,6 +93,7 @@ class Database:
                 ON keepalive_rules(enabled, next_run_at, retry_after_at);
                 """
             )
+            self._ensure_app_state_schema(conn)
             self._ensure_column(conn, "keepalive_rules", "timezone_name", "TEXT")
             self._ensure_column(conn, "keepalive_rules", "window_start_hour", "INTEGER NOT NULL DEFAULT 9")
             self._ensure_column(conn, "keepalive_rules", "window_end_hour", "INTEGER NOT NULL DEFAULT 19")
@@ -549,3 +550,55 @@ class Database:
         if column_name in columns:
             return
         conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
+
+    def _ensure_app_state_schema(self, conn: sqlite3.Connection) -> None:
+        table_info = conn.execute("PRAGMA table_info(app_state)").fetchall()
+        if not table_info:
+            return
+        columns = {row["name"] for row in table_info}
+        if "json_value" in columns and "state_key" in columns:
+            return
+
+        legacy_key_column = None
+        for candidate in ("key", "name", "state_name"):
+            if candidate in columns:
+                legacy_key_column = candidate
+                break
+        if legacy_key_column is None:
+            legacy_key_column = next(iter(columns))
+
+        legacy_value_column = None
+        for candidate in ("json", "value", "payload", "content"):
+            if candidate in columns:
+                legacy_value_column = candidate
+                break
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_state_v2 (
+                state_key TEXT PRIMARY KEY,
+                json_value TEXT,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+        if legacy_value_column is None:
+            conn.execute(
+                f"""
+                INSERT OR REPLACE INTO app_state_v2 (state_key, json_value, updated_at)
+                SELECT CAST({legacy_key_column} AS TEXT), NULL, COALESCE(updated_at, '')
+                FROM app_state
+                """
+            )
+        else:
+            conn.execute(
+                f"""
+                INSERT OR REPLACE INTO app_state_v2 (state_key, json_value, updated_at)
+                SELECT CAST({legacy_key_column} AS TEXT), {legacy_value_column}, COALESCE(updated_at, '')
+                FROM app_state
+                """
+            )
+
+        conn.execute("DROP TABLE app_state")
+        conn.execute("ALTER TABLE app_state_v2 RENAME TO app_state")

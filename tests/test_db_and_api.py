@@ -359,6 +359,34 @@ def test_database_upsert_sms_deduplicates(tmp_path: Path) -> None:
     assert second_duplicates == 1
 
 
+def test_database_migrates_legacy_app_state_schema(tmp_path: Path) -> None:
+    import sqlite3
+
+    db_path = tmp_path / "db.sqlite"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE app_state (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO app_state (key, value, updated_at) VALUES (?, ?, ?)",
+        ("legacy_state", '{"ok": true}', "2026-05-29T00:00:00+00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    db = Database(db_path)
+    db.init_schema()
+    payload = db.get_app_state_json("legacy_state")
+
+    assert payload == {"ok": True}
+
+
 def test_keepalive_database_rule_roundtrip(tmp_path: Path) -> None:
     db = Database(tmp_path / "db.sqlite")
     db.init_schema()
