@@ -11,6 +11,7 @@ PORT=${PORT:-8000}
 WORK_DIR=${WORK_DIR:-"${ROOT_DIR}"}
 PYTHON_BIN=${PYTHON_BIN:-"${ROOT_DIR}/.venv/bin/python"}
 ADB_PATH=${ADB_PATH:-}
+FFMPEG_PATH=${FFMPEG_PATH:-}
 ADB_DEVICE_SERIAL=${ADB_DEVICE_SERIAL:-}
 APP_PASSWORD=${APP_PASSWORD:-}
 DB_PATH=${DB_PATH:-}
@@ -50,6 +51,7 @@ Options:
   --python-bin PATH
   --work-dir PATH
   --adb-path PATH
+  --ffmpeg-path PATH
   --adb-device-serial VALUE
   --app-password VALUE
   --db-path PATH
@@ -153,6 +155,7 @@ write_plist() {
     <key>EnvironmentVariables</key>
     <dict>
 $(append_env_var "ADB_PATH" "${ADB_PATH}")
+$(append_env_var "FFMPEG_PATH" "${FFMPEG_PATH}")
 $(append_env_var "ADB_DEVICE_SERIAL" "${ADB_DEVICE_SERIAL}")
 $(append_env_var "APP_PASSWORD" "${APP_PASSWORD}")
 $(append_env_var "DB_PATH" "${DB_PATH}")
@@ -253,6 +256,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --adb-path)
             ADB_PATH=$2
+            shift 2
+            ;;
+        --ffmpeg-path)
+            FFMPEG_PATH=$2
             shift 2
             ;;
         --adb-device-serial)

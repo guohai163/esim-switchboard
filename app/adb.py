@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shlex
 import re
 import subprocess
@@ -61,6 +62,71 @@ class AdbClient:
 
     def read_isub(self) -> str:
         return self.run(["shell", "dumpsys", "isub"], timeout=30)
+
+    def get_screen_size(self) -> tuple[int, int]:
+        """Return the physical device resolution parsed from wm size."""
+
+        output = self.run(["shell", "wm", "size"], timeout=15)
+        match = re.search(r"Physical size:\s*(\d+)x(\d+)", output)
+        if not match:
+            raise AdbCommandError(["shell", "wm", "size"], f"Unable to parse screen size from output: {output.strip()}")
+        return int(match.group(1)), int(match.group(2))
+
+    def send_keyevent(self, keycode: int) -> None:
+        """Dispatch a simple Android key event through adb input."""
+
+        self.run(["shell", "input", "keyevent", str(keycode)], timeout=15)
+
+    def wake_screen(self) -> None:
+        """Best-effort wake without toggling the screen back off."""
+
+        self.send_keyevent(224)
+
+    def send_tap(self, x: int, y: int) -> None:
+        """Dispatch a tap gesture in physical device coordinates."""
+
+        self.run(["shell", "input", "tap", str(x), str(y)], timeout=15)
+
+    def open_h264_screenrecord(
+        self,
+        *,
+        bitrate: str | None = None,
+        time_limit_seconds: int | None = None,
+        transport: str = "exec-out",
+    ) -> subprocess.Popen[bytes]:
+        """Start a raw H264 screenrecord process that writes to stdout."""
+
+        if transport == "exec-out":
+            command = [
+                *self._base_command(),
+                "exec-out",
+                "screenrecord",
+                "--output-format=h264",
+            ]
+            if bitrate:
+                command.extend(["--bit-rate", bitrate])
+            if time_limit_seconds is not None:
+                command.extend(["--time-limit", str(time_limit_seconds)])
+            command.append("-")
+        elif transport == "shell":
+            remote_parts = ["screenrecord", "--output-format=h264"]
+            if bitrate:
+                remote_parts.extend(["--bit-rate", bitrate])
+            if time_limit_seconds is not None:
+                remote_parts.extend(["--time-limit", str(time_limit_seconds)])
+            remote_parts.append("-")
+            command = [*self._base_command(), "shell", "sh", "-c", shlex.join(remote_parts)]
+        else:
+            raise ValueError(f"Unsupported screenrecord transport: {transport}")
+        try:
+            return subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                bufsize=0,
+            )
+        except FileNotFoundError as exc:
+            raise AdbCommandError(command, f"ADB executable not found: {self.config.adb_path}") from exc
 
     def query_sms_inbox(self, limit: int | None = None) -> str:
         attempts = [

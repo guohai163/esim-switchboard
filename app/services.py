@@ -8,6 +8,7 @@ from app.adb import AdbClient, parse_isub_output, parse_sms_query_output
 from app.collab import CollabSessionService
 from app.config import AppConfig
 from app.db import Database
+from app.device_monitor import DeviceMonitorService
 from app.models import SyncResponse
 
 
@@ -125,6 +126,7 @@ class AppServices:
     sms_service: SmsSyncService
     monitor: Any
     switch_service: Any
+    device_monitor_service: DeviceMonitorService
     sms_event_service: Any
     collab_service: CollabSessionService
     keepalive_service: Any | None = None

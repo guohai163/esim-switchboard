@@ -8,9 +8,10 @@ from app.adb import AdbClient, AdbCommandError
 from app.collab import CollabSessionService
 from app.config import AppConfig
 from app.db import Database
+from app.device_monitor import BROWSER_SUPPORTED_HINT
 from app.keepalive_service import KeepaliveService
 from app.main import build_services, create_app
-from app.services import AppServices
+from app.services import AppServices, EsimSyncService
 from app.models import SmsMessageRecord
 from app.switch_service import EsimSwitchConflictError
 
@@ -22,6 +23,7 @@ class FakeAdbClient:
          {id=7 simSlotIndex=1 displayName=giffgaff sws carrierName=giffgaff isEmbedded=true}
         ++++++++++++++++++++++++++++++++
         AllSubInfoList:
+         {id=1 simSlotIndex=0 displayName=CARD carrierName=运营商未知 isEmbedded=false}
          {id=5 simSlotIndex=-1 displayName=Club carrierName=没有服务 isEmbedded=true}
          {id=7 simSlotIndex=1 displayName=giffgaff sws carrierName=giffgaff isEmbedded=true}
         ++++++++++++++++++++++++++++++++
@@ -29,6 +31,13 @@ class FakeAdbClient:
         self.sms_output = """Row: 0 address=10010, body=hello, sub_id=7, _id=1, date=1716680000000
 Row: 1 address=10086, body=world, sub_id=5, _id=2, date=1716670000000
 """
+        self.keyevents: list[int] = []
+        self.taps: list[tuple[int, int]] = []
+        self.wake_calls = 0
+        self.screen_size = (1080, 2400)
+        self.screenrecord_help = "Usage: screenrecord [options] --output-format=h264"
+        self.last_screenrecord_bitrate: str | None = None
+        self.last_screenrecord_time_limit: int | None = None
 
     def get_devices(self, timeout: float = 30) -> list[str]:  # noqa: ARG002
         return ["device-001"]
@@ -39,6 +48,13 @@ Row: 1 address=10086, body=world, sub_id=5, _id=2, date=1716670000000
     def query_sms_inbox(self, limit=None) -> str:  # noqa: ANN001
         return self.sms_output
 
+    def run(self, args: list[str], timeout: float = 30) -> str:  # noqa: ARG002
+        if args == ["shell", "screenrecord", "--help"]:
+            return self.screenrecord_help
+        if args == ["shell", "wm", "size"]:
+            return f"Physical size: {self.screen_size[0]}x{self.screen_size[1]}"
+        raise AssertionError(f"Unexpected adb run command: {args}")
+
     def stream_logcat(self):  # noqa: ANN201
         class _DummyProcess:
             stdout = None
@@ -48,6 +64,57 @@ Row: 1 address=10086, body=world, sub_id=5, _id=2, date=1716670000000
                 return 0
 
         return _DummyProcess()
+
+    def send_keyevent(self, keycode: int) -> None:
+        self.keyevents.append(keycode)
+
+    def wake_screen(self) -> None:
+        self.wake_calls += 1
+        self.send_keyevent(224)
+
+    def send_tap(self, x: int, y: int) -> None:
+        self.taps.append((x, y))
+
+    def get_screen_size(self) -> tuple[int, int]:
+        return self.screen_size
+
+    def open_h264_screenrecord(
+        self,
+        *,
+        bitrate: str | None = None,
+        time_limit_seconds: int | None = None,
+        transport: str = "exec-out",
+    ):  # noqa: ANN201
+        import io
+
+        class _PeekPipe(io.BufferedReader):
+            def __init__(self, data: bytes) -> None:
+                super().__init__(io.BytesIO(data))
+
+        class _Process:
+            def __init__(self) -> None:
+                self.stdout = _PeekPipe(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2")
+                self.stderr = io.BytesIO(b"")
+
+            @staticmethod
+            def poll() -> int | None:
+                return None
+
+            @staticmethod
+            def terminate() -> None:
+                return None
+
+            @staticmethod
+            def wait(timeout: float = 0) -> int:  # noqa: ARG004
+                return 0
+
+            @staticmethod
+            def kill() -> None:
+                return None
+
+        self.last_screenrecord_bitrate = bitrate
+        self.last_screenrecord_time_limit = time_limit_seconds
+        return _Process()
 
 
 class FakeSwitchService:
@@ -69,6 +136,7 @@ class FakeSwitchService:
             "steps": [],
         }
         self.locked = False
+        self.pre_switch_hooks: list[tuple[str, bool]] = []
 
     def get_status(self) -> dict:
         return self.task
@@ -76,11 +144,17 @@ class FakeSwitchService:
     def restore_state(self) -> None:
         return None
 
+    def register_pre_switch_hook(self, hook) -> None:  # noqa: ANN001
+        self._pre_switch_hook = hook
+
     def start_switch(self, display_name: str, lock_minutes: int) -> dict:
         if self.task["status"] == "running":
             raise EsimSwitchConflictError("An eSIM switch task is already running")
         if self.locked:
             raise RuntimeError("当前处于切换锁定期，需等待到 2026-05-26 08:30:00 后再试，剩余约 10 分钟")
+        if hasattr(self, "_pre_switch_hook"):
+            self._pre_switch_hook(display_name, False)
+            self.pre_switch_hooks.append((display_name, False))
         self.task = {
             "task_id": "task-001",
             "status": "running",
@@ -192,6 +266,7 @@ class FakeKeepaliveService:
         *,
         display_name: str | None,
         carrier_name: str | None,
+        timezone_name: str,
         target_phone: str,
         interval_days: int,
         enabled: bool,
@@ -200,7 +275,7 @@ class FakeKeepaliveService:
             "esim_sub_id": esim_sub_id,
             "esim_display_name": display_name,
             "esim_carrier_name": carrier_name,
-            "timezone_name": "Asia/Shanghai",
+            "timezone_name": timezone_name,
             "window_start_hour": 9,
             "window_end_hour": 19,
             "target_phone": target_phone,
@@ -292,6 +367,12 @@ def make_test_app(tmp_path: Path) -> TestClient:
     services.sms_event_service = FakeSmsEventService()
     services.monitor.sms_event_service = services.sms_event_service
     services.keepalive_service = FakeKeepaliveService()
+    services.device_monitor_service.adb_client = services.adb_client
+    services.switch_service.register_pre_switch_hook(
+        lambda display_name, keepalive: services.device_monitor_service.force_stop(
+            "eSIM 切换已开始，手机监控已自动关闭" if not keepalive else "保号任务需要独占手机，监控已自动关闭"
+        )
+    )
     services.db.init_schema()
     services.esim_service.sync()
     services.sms_service.sync_all_inbox()
@@ -306,6 +387,21 @@ def make_test_services(tmp_path: Path) -> tuple[AppConfig, AppServices]:
     config.app_auth_cookie_name = "esim_switch_auth"
     config.app_auth_cookie_value = "signed-secret-cookie"
     services = build_services(config)
+    services.adb_client = FakeAdbClient()
+    services.esim_service.adb_client = services.adb_client
+    services.sms_service.adb_client = services.adb_client
+    services.monitor.adb_client = services.adb_client
+    services.monitor.sms_service = services.sms_service
+    services.switch_service = FakeSwitchService()
+    services.sms_event_service = FakeSmsEventService()
+    services.monitor.sms_event_service = services.sms_event_service
+    services.keepalive_service = FakeKeepaliveService()
+    services.device_monitor_service.adb_client = services.adb_client
+    services.switch_service.register_pre_switch_hook(
+        lambda display_name, keepalive: services.device_monitor_service.force_stop(
+            "eSIM 切换已开始，手机监控已自动关闭" if not keepalive else "保号任务需要独占手机，监控已自动关闭"
+        )
+    )
     services.db.init_schema()
     return config, services
 
@@ -329,6 +425,12 @@ def make_test_client_with_config(tmp_path: Path, *, trust_proxy_headers: bool = 
     services.sms_event_service = FakeSmsEventService()
     services.monitor.sms_event_service = services.sms_event_service
     services.keepalive_service = FakeKeepaliveService()
+    services.device_monitor_service.adb_client = services.adb_client
+    services.switch_service.register_pre_switch_hook(
+        lambda display_name, keepalive: services.device_monitor_service.force_stop(
+            "eSIM 切换已开始，手机监控已自动关闭" if not keepalive else "保号任务需要独占手机，监控已自动关闭"
+        )
+    )
     services.db.init_schema()
     services.esim_service.sync()
     services.sms_service.sync_all_inbox()
@@ -470,6 +572,31 @@ def test_keepalive_database_rule_insert_accepts_full_payload(tmp_path: Path) -> 
     assert created["target_phone"] == "+8518500050982"
     assert created["interval_days"] == 90
     assert created["last_error"] is None
+
+
+def test_database_esim_remark_roundtrip_and_snapshot_mapping(tmp_path: Path) -> None:
+    db = Database(tmp_path / "db.sqlite")
+    db.init_schema()
+    fake_adb = FakeAdbClient()
+    esim_service = EsimSyncService(db, fake_adb)
+    esim_service.sync()
+
+    created = db.upsert_esim_remark("5", "备用英国卡", "2026-05-29T00:00:00+00:00")
+    updated = db.upsert_esim_remark("5", "主切换卡", "2026-05-29T00:01:00+00:00")
+    remarks = db.list_esim_remarks()
+    snapshot = db.get_latest_esim_snapshot()
+    deleted = db.delete_esim_remark("5")
+    snapshot_after_delete = db.get_latest_esim_snapshot()
+
+    assert created["remark"] == "备用英国卡"
+    assert updated["remark"] == "主切换卡"
+    assert remarks == {"5": "主切换卡"}
+    assert snapshot is not None
+    assert next(item for item in snapshot["subscriptions"] if item["sub_id"] == "5")["remark"] == "主切换卡"
+    assert next(item for item in snapshot["subscriptions"] if item["sub_id"] == "7")["remark"] is None
+    assert deleted is True
+    assert snapshot_after_delete is not None
+    assert next(item for item in snapshot_after_delete["subscriptions"] if item["sub_id"] == "5")["remark"] is None
 
 
 def test_keepalive_message_preview_truncates_to_40_chars(tmp_path: Path) -> None:
@@ -649,8 +776,11 @@ def test_api_endpoints_return_dashboard_data(tmp_path: Path) -> None:
 
     assert health.status_code == 200
     assert health.json()["adb_available"] is True
+    assert health.json()["device_monitor"]["available"] is True
+    assert health.json()["device_monitor"]["browser_supported_hint"] == BROWSER_SUPPORTED_HINT
     assert latest_esim.status_code == 200
     assert latest_esim.json()["embedded_total_count"] == 2
+    assert latest_esim.json()["subscriptions"][0]["remark"] is None
     assert sms.status_code == 200
     assert sms.json()["total"] == 2
     assert sms.json()["items"][0]["display_name"] == "giffgaff sws"
@@ -682,6 +812,40 @@ def test_switch_conflict_returns_409(tmp_path: Path) -> None:
 
     assert first.status_code == 200
     assert second.status_code == 409
+
+
+def test_esim_remark_endpoint_supports_save_update_and_clear(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    created = client.put("/api/esim/remarks/5", json={"remark": "备用英国卡"})
+    updated = client.put("/api/esim/remarks/5", json={"remark": "  主切换卡  "})
+    latest = client.get("/api/esim/latest")
+    cleared = client.put("/api/esim/remarks/5", json={"remark": "   "})
+    latest_after_clear = client.get("/api/esim/latest")
+
+    assert created.status_code == 200
+    assert created.json() == {"sub_id": "5", "remark": "备用英国卡"}
+    assert updated.status_code == 200
+    assert updated.json() == {"sub_id": "5", "remark": "主切换卡"}
+    assert latest.status_code == 200
+    assert next(item for item in latest.json()["subscriptions"] if item["sub_id"] == "5")["remark"] == "主切换卡"
+    assert cleared.status_code == 200
+    assert cleared.json() == {"sub_id": "5", "remark": None}
+    assert latest_after_clear.status_code == 200
+    assert next(item for item in latest_after_clear.json()["subscriptions"] if item["sub_id"] == "5")["remark"] is None
+
+
+def test_esim_remark_endpoint_supports_physical_sim_and_rejects_missing_sub_id(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    physical = client.put("/api/esim/remarks/1", json={"remark": "实体卡备注"})
+    missing = client.put("/api/esim/remarks/999", json={"remark": "不存在"})
+
+    assert physical.status_code == 200
+    assert physical.json() == {"sub_id": "1", "remark": "实体卡备注"}
+    assert missing.status_code == 404
 
 
 def test_keepalive_rule_crud_endpoints(tmp_path: Path) -> None:
@@ -791,6 +955,9 @@ def test_auth_protects_business_apis(tmp_path: Path) -> None:
     client = make_test_app(tmp_path)
 
     unauthorized = client.get("/api/health")
+    unauthorized_remark = client.put("/api/esim/remarks/5", json={"remark": "test"})
+    unauthorized_action = client.post("/api/device/monitor/control/action", json={"action": "home"})
+    unauthorized_tap = client.post("/api/device/monitor/control/tap", json={"x_ratio": 0.5, "y_ratio": 0.5})
     wrong_login = client.post("/api/auth/login", json={"password": "wrong"})
     auth_status_before = client.get("/api/auth/status")
     good_login = client.post("/api/auth/login", json={"password": "secret123"})
@@ -801,6 +968,9 @@ def test_auth_protects_business_apis(tmp_path: Path) -> None:
     unauthorized_again = client.get("/api/health")
 
     assert unauthorized.status_code == 401
+    assert unauthorized_remark.status_code == 401
+    assert unauthorized_action.status_code == 401
+    assert unauthorized_tap.status_code == 401
     assert wrong_login.status_code == 401
     assert auth_status_before.status_code == 200
     assert auth_status_before.json()["authenticated"] is False
@@ -980,6 +1150,7 @@ def test_health_degrades_when_adb_device_probe_fails(tmp_path: Path) -> None:
     services.switch_service = FakeSwitchService()
     services.sms_event_service = FakeSmsEventService()
     services.monitor.sms_event_service = services.sms_event_service
+    services.device_monitor_service.adb_client = services.adb_client
     services.esim_service.sync()
     services.sms_service.sync_all_inbox()
     client = TestClient(create_app(config=config, services=services, auto_startup=False))
@@ -996,10 +1167,260 @@ def test_health_degrades_when_adb_device_probe_fails(tmp_path: Path) -> None:
     assert health.json()["adb_available"] is False
     assert "timed out" in health.json()["adb_error"]
     assert health.json()["monitor"]["running"] is False
+    assert health.json()["device_monitor"]["available"] is False
+    assert "timed out" in health.json()["device_monitor"]["reason"]
     assert latest_esim.status_code == 200
     assert latest_esim.json()["embedded_total_count"] == 2
     assert sms.status_code == 200
     assert sms.json()["total"] == 2
+
+
+def test_device_monitor_reports_unavailable_when_ffmpeg_missing(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.app.state.config.ffmpeg_path = "/tmp/missing-ffmpeg"
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json()["adb_available"] is True
+    assert response.json()["device_monitor"]["available"] is False
+    assert "FFmpeg executable not found" in response.json()["device_monitor"]["reason"]
+
+
+def test_device_monitor_reports_unavailable_when_screenrecord_lacks_h264(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    client.app.state.services.adb_client.open_h264_screenrecord = lambda **kwargs: type(  # type: ignore[method-assign]
+        "_Proc",
+        (),
+        {
+            "stdout": __import__("io").BytesIO(b""),
+            "stderr": __import__("io").BytesIO(b"unknown option --output-format"),
+            "poll": staticmethod(lambda: 0),
+            "terminate": staticmethod(lambda: None),
+            "wait": staticmethod(lambda timeout=0: 0),
+            "kill": staticmethod(lambda: None),
+        },
+    )()
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json()["device_monitor"]["available"] is False
+    assert "不支持 H264 直出" in response.json()["device_monitor"]["reason"]
+
+
+def test_device_monitor_probe_ignores_missing_help_text_when_h264_bytes_exist(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    client.app.state.services.adb_client.screenrecord_help = "Usage: screenrecord without output format"
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json()["device_monitor"]["available"] is True
+
+
+def test_device_monitor_startup_reports_bad_mp4_header_when_exec_out_fails(tmp_path: Path) -> None:
+    from app.device_monitor import DeviceMonitorService, DeviceMonitorUnavailableError
+
+    class FakeWebSocket:  # noqa: D401
+        pass
+
+    config = AppConfig.from_env(tmp_path)
+    config.ffmpeg_path = "/tmp/fake-ffmpeg"
+    service = DeviceMonitorService(config, FakeAdbClient())
+    service._resolve_ffmpeg_error = lambda: None  # type: ignore[method-assign]
+    service._spawn_session_with_transport = lambda websocket, transport: (_ for _ in ()).throw(DeviceMonitorUnavailableError("bad header"))  # type: ignore[method-assign]
+
+    try:
+        service._spawn_session(FakeWebSocket())  # type: ignore[arg-type]
+    except DeviceMonitorUnavailableError as exc:
+        assert "bad header" in str(exc)
+    else:
+        raise AssertionError("Expected bad MP4 header to bubble up as unavailable")
+
+
+def test_device_monitor_converts_avcc_to_annexb_before_ffmpeg(tmp_path: Path) -> None:
+    from app.device_monitor import DeviceMonitorService
+
+    config = AppConfig.from_env(tmp_path)
+    service = DeviceMonitorService(config, FakeAdbClient())
+
+    avcc = (
+        b"\x00\x00\x00\x04\x67\x64\x00\x1f"
+        b"\x00\x00\x00\x04\x68\xeb\xe3\xcb"
+        b"\x00\x00\x00\x03\x65\x88\x84"
+    )
+
+    converted, remaining = service._convert_avcc_buffer_to_annexb(avcc, finalize=True)  # noqa: SLF001
+
+    assert remaining == b""
+    assert converted.startswith(b"\x00\x00\x00\x01\x67")
+    assert b"\x00\x00\x00\x01\x68" in converted
+    assert converted.endswith(b"\x00\x00\x00\x01\x65\x88\x84")
+
+
+def test_device_monitor_consumes_avcc_config_record(tmp_path: Path) -> None:
+    from app.device_monitor import DeviceMonitorService
+
+    config = AppConfig.from_env(tmp_path)
+    service = DeviceMonitorService(config, FakeAdbClient())
+    avcc_config = (
+        b"\x01\x64\x00\x1f\xff\xe1"
+        b"\x00\x04\x67\x64\x00\x1f"
+        b"\x01"
+        b"\x00\x04\x68\xeb\xe3\xcb"
+        b"\x00\x00\x00\x03\x65\x88\x84"
+    )
+
+    converted_prefix, remaining, nal_length_size = service._consume_avcc_config_record(avcc_config)  # noqa: SLF001
+
+    assert converted_prefix.startswith(b"\x00\x00\x00\x01\x67")
+    assert b"\x00\x00\x00\x01\x68" in converted_prefix
+    assert remaining == b"\x00\x00\x00\x03\x65\x88\x84"
+    assert nal_length_size == 4
+
+
+def test_device_monitor_consumes_length_prefixed_avcc_config_record(tmp_path: Path) -> None:
+    from app.device_monitor import DeviceMonitorService
+
+    config = AppConfig.from_env(tmp_path)
+    service = DeviceMonitorService(config, FakeAdbClient())
+    avcc_config = (
+        b"\x00\x00\x00\x13"
+        b"\x01\x64\x00\x1f\xff\xe1"
+        b"\x00\x04\x67\x64\x00\x1f"
+        b"\x01"
+        b"\x00\x04\x68\xeb\xe3\xcb"
+        b"\x00\x00\x00\x03\x65\x88\x84"
+    )
+
+    converted_prefix, remaining, nal_length_size = service._consume_length_prefixed_avcc_config_record(avcc_config)  # noqa: SLF001
+
+    assert converted_prefix.startswith(b"\x00\x00\x00\x01\x67")
+    assert remaining == b"\x00\x00\x00\x03\x65\x88\x84"
+    assert nal_length_size == 4
+
+
+def test_device_monitor_converts_avcc_with_two_byte_nal_lengths(tmp_path: Path) -> None:
+    from app.device_monitor import DeviceMonitorService
+
+    config = AppConfig.from_env(tmp_path)
+    service = DeviceMonitorService(config, FakeAdbClient())
+    avcc = (
+        b"\x00\x04\x67\x64\x00\x1f"
+        b"\x00\x04\x68\xeb\xe3\xcb"
+        b"\x00\x03\x65\x88\x84"
+    )
+
+    converted, remaining = service._convert_avcc_buffer_to_annexb(avcc, nal_length_size=2, finalize=True)  # noqa: SLF001
+
+    assert remaining == b""
+    assert converted.startswith(b"\x00\x00\x00\x01\x67")
+    assert converted.endswith(b"\x00\x00\x00\x01\x65\x88\x84")
+
+
+def test_device_monitor_control_action_maps_keyevents(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    response = client.post("/api/device/monitor/control/action", json={"action": "home"})
+
+    assert response.status_code == 200
+    assert client.app.state.services.adb_client.keyevents[-1] == 3
+
+
+def test_device_monitor_health_probe_wakes_screen_before_capability_check(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert client.app.state.services.adb_client.wake_calls >= 1
+    assert 224 in client.app.state.services.adb_client.keyevents
+
+
+def test_device_monitor_tap_maps_ratios_to_device_pixels(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+
+    response = client.post("/api/device/monitor/control/tap", json={"x_ratio": 0.5, "y_ratio": 0.25})
+
+    assert response.status_code == 200
+    assert client.app.state.services.adb_client.taps == [(540, 600)]
+
+
+def test_device_monitor_control_returns_423_during_switch(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    client.app.state.services.switch_service.task["status"] = "running"
+
+    action = client.post("/api/device/monitor/control/action", json={"action": "back"})
+    tap = client.post("/api/device/monitor/control/tap", json={"x_ratio": 0.5, "y_ratio": 0.5})
+
+    assert action.status_code == 423
+    assert tap.status_code == 423
+
+
+def test_switch_start_forces_device_monitor_stop(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    stop_calls: list[str] = []
+    client.app.state.services.device_monitor_service.force_stop = lambda reason: stop_calls.append(reason)  # type: ignore[method-assign]
+
+    response = client.post("/api/esim/switch", json={"display_name": "Club", "lock_minutes": 10})
+
+    assert response.status_code == 200
+    assert stop_calls == ["eSIM 切换已开始，手机监控已自动关闭"]
+
+
+def test_device_monitor_websocket_requires_auth(tmp_path: Path) -> None:
+    client = make_test_client_with_config(tmp_path)
+
+    try:
+        with client.websocket_connect("/api/device/monitor/ws"):
+            raise AssertionError("Expected websocket authentication to fail")
+    except WebSocketDisconnect as exc:
+        assert exc.code == 4401
+
+
+def test_device_monitor_websocket_rejects_when_switch_running(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    client.app.state.services.switch_service.task["status"] = "running"
+
+    with client.websocket_connect("/api/device/monitor/ws") as websocket:
+        message = websocket.receive_json()
+        assert message["type"] == "error"
+        try:
+            websocket.receive_json()
+            raise AssertionError("Expected websocket to close after locked error")
+        except WebSocketDisconnect as exc:
+            assert exc.code == 4423
+
+
+def test_device_monitor_websocket_rejects_second_viewer(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    client.app.state.services.device_monitor_service._session = object()  # type: ignore[attr-defined]
+    client.app.state.services.device_monitor_service.get_status = lambda **kwargs: {  # type: ignore[method-assign]
+        "available": True,
+        "running": True,
+        "reason": None,
+        "browser_supported_hint": BROWSER_SUPPORTED_HINT,
+    }
+
+    with client.websocket_connect("/api/device/monitor/ws") as websocket:
+        message = websocket.receive_json()
+        assert message["type"] == "error"
+        try:
+            websocket.receive_json()
+            raise AssertionError("Expected websocket to close after conflict error")
+        except WebSocketDisconnect as exc:
+            assert exc.code == 4409
 
 
 def test_sms_stream_requires_auth_and_allows_authenticated_stream(tmp_path: Path) -> None:

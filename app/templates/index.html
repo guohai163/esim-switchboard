@@ -595,6 +595,23 @@
             line-height: 1.4;
         }
 
+        .esim-item-remark {
+            color: var(--text);
+            font-size: 0.88rem;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .esim-item-remark.empty {
+            color: var(--muted);
+        }
+
+        .esim-item-actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 10px;
+        }
+
         .esim-kind-badge {
             display: inline-flex;
             align-items: center;
@@ -840,6 +857,155 @@
             background: white;
         }
 
+        .monitor-overlay-card {
+            width: min(1180px, 100%);
+        }
+
+        .monitor-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.72fr);
+            gap: 18px;
+        }
+
+        .monitor-stage {
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            border: 1px solid rgba(15, 118, 110, 0.12);
+            background:
+                radial-gradient(circle at top, rgba(15, 118, 110, 0.16), transparent 40%),
+                linear-gradient(180deg, #14211f 0%, #0b1312 100%);
+            min-height: 520px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .monitor-video-shell {
+            width: min(100%, 360px);
+            aspect-ratio: 9 / 19.5;
+            border-radius: 28px;
+            border: 8px solid rgba(255, 255, 255, 0.16);
+            background: rgba(5, 10, 10, 0.92);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.32);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .monitor-video-shell video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+            background: black;
+            cursor: crosshair;
+        }
+
+        .monitor-stage-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+            color: white;
+            background: linear-gradient(180deg, rgba(9, 14, 14, 0.18), rgba(9, 14, 14, 0.72));
+        }
+
+        .monitor-stage-overlay[hidden] {
+            display: none;
+        }
+
+        .monitor-stage-message {
+            width: min(100%, 420px);
+            padding: 18px 20px;
+            border-radius: 8px;
+            background: rgba(8, 12, 12, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+        }
+
+        .monitor-stage-message strong {
+            display: block;
+            font-size: 1.04rem;
+            margin-bottom: 8px;
+        }
+
+        .monitor-stage-message p {
+            margin: 0;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.86);
+        }
+
+        .monitor-panel {
+            display: grid;
+            gap: 14px;
+            align-content: start;
+        }
+
+        .monitor-panel-card {
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(15, 118, 110, 0.12);
+            background: #fffdf9;
+        }
+
+        .monitor-panel-card h3 {
+            margin: 0 0 8px;
+            font-size: 1rem;
+        }
+
+        .monitor-panel-card p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.6;
+            font-size: 0.92rem;
+        }
+
+        .monitor-status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .monitor-status-text {
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            min-height: 22px;
+        }
+
+        .monitor-hint {
+            color: var(--muted);
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+
+        .monitor-control-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .monitor-control-grid button {
+            padding: 11px 12px;
+            font-size: 0.9rem;
+            width: 100%;
+        }
+
+        .monitor-control-note {
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.55;
+        }
+
         .switch-steps {
             background: #fffdf9;
             border-radius: 8px;
@@ -1032,6 +1198,196 @@
             gap: 12px;
         }
 
+        .mobile-dashboard {
+            display: none;
+            gap: 14px;
+        }
+
+        .mobile-stack {
+            display: grid;
+            gap: 12px;
+        }
+
+        .mobile-card-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 14px;
+        }
+
+        .mobile-card-top h2 {
+            margin-bottom: 6px;
+        }
+
+        .mobile-current-esim {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 14px;
+            padding: 14px;
+            border-radius: 8px;
+            background: linear-gradient(180deg, #f4fbf9 0%, #edf8f5 100%);
+            border: 1px solid rgba(15, 118, 110, 0.14);
+        }
+
+        .mobile-current-esim strong {
+            font-size: 1.08rem;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .mobile-current-esim .meta {
+            line-height: 1.5;
+        }
+
+        .mobile-kv {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .mobile-kv-item {
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: var(--panel-strong);
+            border: 1px solid #e1ebe8;
+        }
+
+        .mobile-kv-item label {
+            display: block;
+            color: var(--muted);
+            font-size: 0.8rem;
+            margin-bottom: 8px;
+        }
+
+        .mobile-kv-item strong {
+            display: block;
+            font-size: 0.98rem;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .mobile-lock-note {
+            color: var(--muted);
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }
+
+        .mobile-esim-list,
+        .mobile-sms-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .mobile-esim-item,
+        .mobile-sms-item {
+            padding: 14px;
+            border: 1px solid #e1ebe8;
+            border-radius: 8px;
+            background: var(--panel-strong);
+        }
+
+        .mobile-esim-item.selected {
+            border-color: rgba(15, 118, 110, 0.48);
+            background: #eefaf7;
+        }
+
+        .mobile-esim-item-top,
+        .mobile-sms-item-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .mobile-esim-item-name,
+        .mobile-sms-item-sender {
+            font-weight: 700;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .mobile-esim-item-body,
+        .mobile-sms-item-body,
+        .mobile-realtime-body {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            word-break: break-word;
+        }
+
+        .mobile-esim-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .mobile-realtime-card {
+            display: grid;
+            gap: 10px;
+        }
+
+        .mobile-realtime-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.5;
+        }
+
+        .mobile-notice {
+            margin-top: 4px;
+        }
+
+        body[data-view="mobile"] .desktop-dashboard,
+        body[data-view="mobile"] .switch-lock-card,
+        body[data-view="mobile"] .keepalive-card,
+        body[data-view="mobile"] .page > .cursor-layer,
+        body[data-view="mobile"] #open-keepalive-btn,
+        body[data-view="mobile"] .sms-card .toolbar-actions > select,
+        body[data-view="mobile"] .sms-card .toolbar-actions > .pager {
+            display: none !important;
+        }
+
+        body[data-view="mobile"] .mobile-dashboard {
+            display: grid;
+        }
+
+        body[data-view="mobile"] .hero {
+            padding: 16px;
+        }
+
+        body[data-view="mobile"] .hero p {
+            max-width: none;
+            font-size: 0.92rem;
+        }
+
+        body[data-view="mobile"] .actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+
+        body[data-view="mobile"] .actions button {
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 11px 14px;
+        }
+
+        body[data-view="mobile"] .overlay-card {
+            width: min(560px, 100%);
+            padding: 18px;
+        }
+
+        body[data-view="mobile"] #switch-overlay.mobile-text-only .switch-grid {
+            grid-template-columns: 1fr;
+        }
+
+        body[data-view="mobile"] #switch-overlay.mobile-text-only .switch-preview {
+            display: none;
+        }
+
         @media (min-width: 900px) {
             .span-4 {
                 grid-column: span 4;
@@ -1129,6 +1485,10 @@
             .pager span {
                 flex: 0 0 auto;
             }
+
+            .mobile-kv {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -1142,11 +1502,12 @@
             <div class="actions">
                 <button id="sync-esim-btn">同步 eSIM</button>
                 <button id="open-keepalive-btn" class="secondary" type="button">保号设置</button>
+                <button id="open-device-monitor-btn" class="secondary" type="button">手机屏幕监控</button>
                 <button id="sync-sms-btn" class="secondary">拉取全部历史短信</button>
             </div>
         </section>
 
-        <section class="dashboard-layout">
+        <section class="dashboard-layout desktop-dashboard">
             <main class="main-column">
                 <article class="card switch-lock-card">
                     <div class="lock-card-top">
@@ -1330,6 +1691,75 @@
                 </article>
             </aside>
         </section>
+
+        <section class="mobile-dashboard" aria-label="移动端精简视图">
+            <article class="card">
+                <div class="mobile-card-top">
+                    <div>
+                        <h2>eSIM 切换</h2>
+                        <div class="meta" id="mobile-esim-summary">读取中</div>
+                    </div>
+                    <div id="mobile-esim-status-pill" class="pill">读取中</div>
+                </div>
+                <div class="mobile-current-esim">
+                    <div>
+                        <div class="meta">当前激活 eSIM</div>
+                        <strong id="mobile-current-esim-name">-</strong>
+                    </div>
+                    <div class="meta" id="mobile-current-esim-meta">运营商 / Sub ID 读取中</div>
+                    <div class="meta" id="mobile-current-esim-remark">备注读取中</div>
+                </div>
+                <div class="mobile-kv">
+                    <div class="mobile-kv-item">
+                        <label>最近同步</label>
+                        <strong id="mobile-esim-sync-at">-</strong>
+                    </div>
+                    <div class="mobile-kv-item">
+                        <label>锁定状态</label>
+                        <strong id="mobile-lock-remaining">-</strong>
+                    </div>
+                </div>
+                <div class="mobile-lock-note" id="mobile-lock-note">切换状态读取中</div>
+                <div id="mobile-esim-list" class="mobile-esim-list">
+                    <div class="meta">暂无 eSIM 记录</div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="mobile-card-top">
+                    <div>
+                        <h2>实时短信</h2>
+                        <div class="meta" id="mobile-realtime-summary">等待实时短信</div>
+                    </div>
+                    <div id="mobile-monitor-pill" class="pill">监听状态读取中</div>
+                </div>
+                <div class="mobile-realtime-card">
+                    <div class="mobile-sms-item">
+                        <div class="mobile-sms-item-top">
+                            <div class="mobile-sms-item-sender" id="mobile-realtime-sender">暂无实时短信</div>
+                            <div class="meta" id="mobile-realtime-time">-</div>
+                        </div>
+                        <div class="mobile-realtime-meta" id="mobile-realtime-meta">
+                            <span>等待新短信事件</span>
+                        </div>
+                        <div class="mobile-realtime-body" id="mobile-realtime-body">新短信到达后会在这里实时更新。</div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="mobile-card-top">
+                    <div>
+                        <h2>最新短信</h2>
+                        <div class="meta" id="mobile-sms-summary">读取中</div>
+                    </div>
+                </div>
+                <div id="mobile-sms-list" class="mobile-sms-list">
+                    <div class="meta">暂无短信记录</div>
+                </div>
+                <div class="notice mobile-notice" id="mobile-notice"></div>
+            </article>
+        </section>
     </div>
 
     <div id="switch-confirm-overlay" class="overlay" aria-live="polite" aria-modal="true">
@@ -1377,11 +1807,66 @@
                 <button id="switch-overlay-close" class="overlay-close" type="button" disabled>关闭</button>
             </div>
             <div class="switch-grid">
-                <div class="switch-preview">
+                <div id="switch-preview-panel" class="switch-preview">
                     <img id="switch-preview-image" alt="切换步骤截图" />
                 </div>
                 <div class="switch-steps">
                     <ol id="switch-step-list"></ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="device-monitor-overlay" class="overlay" aria-live="polite" aria-modal="true">
+        <div class="overlay-card monitor-overlay-card">
+            <div class="overlay-top">
+                <div>
+                    <h2 class="overlay-title">手机屏幕监控</h2>
+                    <p class="overlay-subtitle" id="device-monitor-subtitle">仅支持桌面 Chromium 浏览器，切换任务运行时会自动禁用。</p>
+                </div>
+                <button id="device-monitor-close" class="overlay-close" type="button">关闭</button>
+            </div>
+            <div class="monitor-grid">
+                <div class="monitor-stage">
+                    <div class="monitor-video-shell">
+                        <video id="device-monitor-video" autoplay muted playsinline></video>
+                    </div>
+                    <div id="device-monitor-stage-overlay" class="monitor-stage-overlay">
+                        <div class="monitor-stage-message">
+                            <strong id="device-monitor-stage-title">准备连接手机画面</strong>
+                            <p id="device-monitor-stage-text">点击“打开监控”后会通过 H264 实时传输手机屏幕。</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="monitor-panel">
+                    <div class="monitor-panel-card">
+                        <div class="monitor-status-row">
+                            <h3>实时状态</h3>
+                            <div id="device-monitor-pill" class="pill bad">未连接</div>
+                        </div>
+                        <div id="device-monitor-status" class="monitor-status-text">等待打开监控。</div>
+                        <div class="confirm-actions" style="margin-top: 14px; justify-content: flex-start;">
+                            <button id="device-monitor-open-stream-btn" type="button">打开监控</button>
+                            <button id="device-monitor-stop-stream-btn" class="secondary" type="button">断开监控</button>
+                        </div>
+                    </div>
+                    <div class="monitor-panel-card">
+                        <h3>遥控按钮</h3>
+                        <p>支持点击手机画面，以及返回、Home、Recent、音量和锁屏/亮屏等轻量控制。</p>
+                        <div class="monitor-control-grid">
+                            <button data-monitor-action="back" class="secondary" type="button">返回</button>
+                            <button data-monitor-action="home" class="secondary" type="button">Home</button>
+                            <button data-monitor-action="recent" class="secondary" type="button">Recent</button>
+                            <button data-monitor-action="power" class="secondary" type="button">电源</button>
+                            <button data-monitor-action="volume_up" class="secondary" type="button">音量 +</button>
+                            <button data-monitor-action="volume_down" class="secondary" type="button">音量 -</button>
+                        </div>
+                        <div class="monitor-control-note" id="device-monitor-control-note">点击画面即可发送 `tap`。切换进行中会自动禁用全部监控与遥控。</div>
+                    </div>
+                    <div class="monitor-panel-card">
+                        <h3>兼容提示</h3>
+                        <p id="device-monitor-hint" class="monitor-hint">仅支持桌面版 Chromium 浏览器，移动端和 Safari/Firefox 暂不支持。</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1418,6 +1903,33 @@
         </div>
     </div>
 
+    <div id="remark-overlay" class="overlay" aria-live="polite" aria-modal="true">
+        <div class="confirm-card">
+            <h2>卡片备注</h2>
+            <p id="remark-subtitle">为当前卡片设置备注，便于区分。</p>
+            <div class="keepalive-form">
+                <div class="switch-target-grid">
+                    <div class="switch-target-box">
+                        <label>卡片名称</label>
+                        <strong id="remark-display-name">-</strong>
+                    </div>
+                    <div class="switch-target-box">
+                        <label>运营商 / Sub ID</label>
+                        <strong id="remark-carrier-subid">-</strong>
+                    </div>
+                </div>
+                <label>
+                    备注内容
+                    <textarea id="remark-input" maxlength="100" placeholder="例如：英国接码 / 主用 / 备用"></textarea>
+                </label>
+            </div>
+            <div class="confirm-actions">
+                <button id="remark-cancel-btn" class="secondary" type="button">取消</button>
+                <button id="remark-submit-btn" type="button">保存备注</button>
+            </div>
+        </div>
+    </div>
+
     <div id="auth-overlay" class="auth-overlay" aria-live="polite" aria-modal="true">
         <div class="auth-card">
             <h2>输入访问密码</h2>
@@ -1446,6 +1958,7 @@
         const noticeEl = document.getElementById("notice");
         const syncEsimBtn = document.getElementById("sync-esim-btn");
         const openKeepaliveBtn = document.getElementById("open-keepalive-btn");
+        const openDeviceMonitorBtn = document.getElementById("open-device-monitor-btn");
         const syncSmsBtn = document.getElementById("sync-sms-btn");
         const prevPageBtn = document.getElementById("prev-page-btn");
         const nextPageBtn = document.getElementById("next-page-btn");
@@ -1458,8 +1971,23 @@
         const switchOverlayTitle = document.getElementById("switch-overlay-title");
         const switchOverlaySubtitle = document.getElementById("switch-overlay-subtitle");
         const switchOverlayClose = document.getElementById("switch-overlay-close");
+        const switchPreviewPanel = document.getElementById("switch-preview-panel");
         const switchPreviewImage = document.getElementById("switch-preview-image");
         const switchStepList = document.getElementById("switch-step-list");
+        const deviceMonitorOverlay = document.getElementById("device-monitor-overlay");
+        const deviceMonitorSubtitle = document.getElementById("device-monitor-subtitle");
+        const deviceMonitorClose = document.getElementById("device-monitor-close");
+        const deviceMonitorVideo = document.getElementById("device-monitor-video");
+        const deviceMonitorStageOverlay = document.getElementById("device-monitor-stage-overlay");
+        const deviceMonitorStageTitle = document.getElementById("device-monitor-stage-title");
+        const deviceMonitorStageText = document.getElementById("device-monitor-stage-text");
+        const deviceMonitorPill = document.getElementById("device-monitor-pill");
+        const deviceMonitorStatus = document.getElementById("device-monitor-status");
+        const deviceMonitorHint = document.getElementById("device-monitor-hint");
+        const deviceMonitorOpenStreamBtn = document.getElementById("device-monitor-open-stream-btn");
+        const deviceMonitorStopStreamBtn = document.getElementById("device-monitor-stop-stream-btn");
+        const deviceMonitorControlNote = document.getElementById("device-monitor-control-note");
+        const deviceMonitorActionButtons = Array.from(document.querySelectorAll("[data-monitor-action]"));
         const switchConfirmSubmit = document.getElementById("switch-confirm-submit");
         const switchCurrentEsim = document.getElementById("switch-current-esim");
         const switchPendingTarget = document.getElementById("switch-pending-target");
@@ -1467,6 +1995,7 @@
         const authPasswordInput = document.getElementById("auth-password");
         const authLoginBtn = document.getElementById("auth-login-btn");
         const authError = document.getElementById("auth-error");
+        const mobileNoticeEl = document.getElementById("mobile-notice");
         const pageEl = document.querySelector(".page");
         const cursorLayer = document.getElementById("cursor-layer");
         const onlineTableBody = document.getElementById("online-table-body");
@@ -1501,6 +2030,32 @@
         const keepaliveSummary = document.getElementById("keepalive-summary");
         const keepalivePill = document.getElementById("keepalive-pill");
         const keepaliveList = document.getElementById("keepalive-list");
+        const remarkOverlay = document.getElementById("remark-overlay");
+        const remarkSubtitle = document.getElementById("remark-subtitle");
+        const remarkDisplayName = document.getElementById("remark-display-name");
+        const remarkCarrierSubId = document.getElementById("remark-carrier-subid");
+        const remarkInput = document.getElementById("remark-input");
+        const remarkCancelBtn = document.getElementById("remark-cancel-btn");
+        const remarkSubmitBtn = document.getElementById("remark-submit-btn");
+        const mobileEsimSummary = document.getElementById("mobile-esim-summary");
+        const mobileEsimStatusPill = document.getElementById("mobile-esim-status-pill");
+        const mobileCurrentEsimName = document.getElementById("mobile-current-esim-name");
+        const mobileCurrentEsimMeta = document.getElementById("mobile-current-esim-meta");
+        const mobileCurrentEsimRemark = document.getElementById("mobile-current-esim-remark");
+        const mobileEsimSyncAt = document.getElementById("mobile-esim-sync-at");
+        const mobileLockRemaining = document.getElementById("mobile-lock-remaining");
+        const mobileLockNote = document.getElementById("mobile-lock-note");
+        const mobileEsimList = document.getElementById("mobile-esim-list");
+        const mobileMonitorPill = document.getElementById("mobile-monitor-pill");
+        const mobileRealtimeSummary = document.getElementById("mobile-realtime-summary");
+        const mobileRealtimeSender = document.getElementById("mobile-realtime-sender");
+        const mobileRealtimeTime = document.getElementById("mobile-realtime-time");
+        const mobileRealtimeMeta = document.getElementById("mobile-realtime-meta");
+        const mobileRealtimeBody = document.getElementById("mobile-realtime-body");
+        const mobileSmsSummary = document.getElementById("mobile-sms-summary");
+        const mobileSmsList = document.getElementById("mobile-sms-list");
+        const MOBILE_BREAKPOINT = 768;
+        const MOBILE_UA_PATTERN = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
 
         const smsState = {
             page: 1,
@@ -1527,8 +2082,15 @@
             reconnectDelayMs: 2000,
             lastHandledEventKey: null,
         };
+        const realtimeSmsState = {
+            latestEvent: null,
+            latestMessage: null,
+        };
         const authState = {
             authenticated: false,
+        };
+        const viewState = {
+            isMobileView: false,
         };
         const keepaliveState = {
             items: [],
@@ -1538,6 +2100,24 @@
             isSubmitting: false,
             browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
             testingSubId: null,
+        };
+        const remarkState = {
+            active: false,
+            editingSubId: null,
+            isSubmitting: false,
+        };
+        const monitorState = {
+            active: false,
+            supported: false,
+            health: null,
+            socket: null,
+            mediaSource: null,
+            sourceBuffer: null,
+            queue: [],
+            objectUrl: null,
+            reconnectTimer: null,
+            isOpening: false,
+            isControlling: false,
         };
         const collabState = {
             socket: null,
@@ -1575,6 +2155,7 @@
             authState.authenticated = false;
             authError.textContent = message;
             authPasswordInput.value = "";
+            closeDeviceMonitorOverlayForce();
             disconnectSwitchEventStream();
             disconnectSmsEventStream();
             disconnectCollab();
@@ -1584,6 +2165,7 @@
             closeSwitchConfirmOverlayForce();
             closeSwitchOverlayForce();
             closeKeepaliveOverlayForce();
+            closeRemarkOverlayForce();
         }
 
         function hideAuthOverlay() {
@@ -1620,9 +2202,29 @@
             nameError.textContent = "";
         }
 
+        function detectMobileView() {
+            const hasMobileUa = MOBILE_UA_PATTERN.test(navigator.userAgent || "");
+            const narrowViewport = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+            return hasMobileUa && narrowViewport;
+        }
+
+        function applyViewMode() {
+            document.body.dataset.view = viewState.isMobileView ? "mobile" : "desktop";
+            switchOverlay.classList.toggle("mobile-text-only", viewState.isMobileView);
+            if (viewState.isMobileView) {
+                closeDeviceMonitorOverlayForce();
+            }
+        }
+
         function setNotice(message, isError = false) {
             noticeEl.textContent = message;
             noticeEl.style.color = isError ? "var(--danger)" : "var(--muted)";
+            mobileNoticeEl.textContent = message;
+            mobileNoticeEl.style.color = isError ? "var(--danger)" : "var(--muted)";
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
         }
 
         function renderHealth(health) {
@@ -1630,9 +2232,21 @@
             document.getElementById("monitor-running").textContent = health.monitor.running ? "RUN" : "STOP";
             document.getElementById("device-count").textContent = String(health.adb_devices.length);
             const healthPill = document.getElementById("health-pill");
-            healthPill.className = health.ok ? "pill" : "pill bad";
-            healthPill.textContent = health.ok ? "服务连接正常" : "服务已启动，但 ADB 不可用";
-            document.getElementById("health-detail").textContent = health.adb_error || `ADB 路径: ${health.adb_path}`;
+            const adbOk = Boolean(health.adb_available);
+            const monitorAvailable = Boolean(health.device_monitor?.available);
+            healthPill.className = adbOk ? (monitorAvailable ? "pill" : "pill warn") : "pill bad";
+            if (!adbOk) {
+                healthPill.textContent = "服务已启动，但 ADB 不可用";
+            } else if (!monitorAvailable) {
+                healthPill.textContent = "ADB 正常，监控不可用";
+            } else {
+                healthPill.textContent = "服务连接正常";
+            }
+            document.getElementById("health-detail").textContent = health.adb_error
+                || health.device_monitor?.reason
+                || `ADB 路径: ${health.adb_path}`;
+            monitorState.health = health.device_monitor || null;
+            renderDeviceMonitorAvailability();
         }
 
         function renderHealthError(message) {
@@ -1643,6 +2257,285 @@
             healthPill.className = "pill bad";
             healthPill.textContent = "服务状态读取失败";
             document.getElementById("health-detail").textContent = message;
+            monitorState.health = null;
+            renderDeviceMonitorAvailability(message);
+        }
+
+        function isDesktopChromium() {
+            const ua = navigator.userAgent || "";
+            const isChromium = /Chrome|CriOS|Edg\//.test(ua) && !/Firefox|FxiOS/.test(ua);
+            return isChromium && !viewState.isMobileView && "MediaSource" in window;
+        }
+
+        function renderDeviceMonitorAvailability(fallbackMessage = "") {
+            const supported = isDesktopChromium();
+            monitorState.supported = supported;
+            const health = monitorState.health;
+            const disabledBySwitch = switchState.task?.status === "running";
+            const available = supported && Boolean(health?.available) && !disabledBySwitch;
+            openDeviceMonitorBtn.style.display = supported ? "" : "none";
+            openDeviceMonitorBtn.disabled = !available;
+            deviceMonitorHint.textContent = health?.browser_supported_hint || "仅支持桌面版 Chromium 浏览器，移动端和 Safari/Firefox 暂不支持。";
+            if (!supported) {
+                deviceMonitorSubtitle.textContent = "当前浏览器不受支持，请使用桌面版 Chromium 浏览器。";
+            } else if (disabledBySwitch) {
+                deviceMonitorSubtitle.textContent = "eSIM 切换进行中，手机监控会自动禁用并强制断开。";
+            } else if (health?.reason) {
+                deviceMonitorSubtitle.textContent = health.reason;
+            } else {
+                deviceMonitorSubtitle.textContent = "仅支持桌面 Chromium 浏览器，切换任务运行时会自动禁用。";
+            }
+            deviceMonitorControlNote.textContent = disabledBySwitch
+                ? "eSIM 切换进行中，全部监控与遥控已禁用。"
+                : "点击画面即可发送 tap。切换进行中会自动禁用全部监控与遥控。";
+            if (!monitorState.active) {
+                deviceMonitorPill.className = available ? "pill" : "pill bad";
+                deviceMonitorPill.textContent = available ? "可连接" : "不可用";
+                deviceMonitorStatus.textContent = fallbackMessage || health?.reason || (supported ? "等待打开监控。" : "当前浏览器不支持手机监控。");
+            }
+            renderDeviceMonitorButtons();
+        }
+
+        function renderDeviceMonitorButtons() {
+            const available = monitorState.supported && Boolean(monitorState.health?.available) && switchState.task?.status !== "running";
+            deviceMonitorOpenStreamBtn.disabled = !available || monitorState.isOpening || Boolean(monitorState.socket);
+            deviceMonitorStopStreamBtn.disabled = !monitorState.socket && !monitorState.isOpening;
+            for (const button of deviceMonitorActionButtons) {
+                button.disabled = !available || !monitorState.socket || monitorState.isControlling;
+            }
+        }
+
+        function openDeviceMonitorOverlay() {
+            if (!monitorState.supported) {
+                setNotice("手机屏幕监控仅支持桌面 Chromium 浏览器。", true);
+                return;
+            }
+            deviceMonitorOverlay.classList.add("active");
+            monitorState.active = true;
+            renderDeviceMonitorAvailability();
+        }
+
+        function closeDeviceMonitorOverlay() {
+            closeDeviceMonitorOverlayForce();
+        }
+
+        function closeDeviceMonitorOverlayForce() {
+            deviceMonitorOverlay.classList.remove("active");
+            monitorState.active = false;
+            stopDeviceMonitorStream();
+        }
+
+        function setDeviceMonitorStage(title, message, visible = true) {
+            deviceMonitorStageTitle.textContent = title;
+            deviceMonitorStageText.textContent = message;
+            deviceMonitorStageOverlay.hidden = !visible;
+        }
+
+        function resetDeviceMonitorMedia() {
+            if (monitorState.sourceBuffer) {
+                monitorState.sourceBuffer.onupdateend = null;
+                monitorState.sourceBuffer = null;
+            }
+            if (monitorState.mediaSource) {
+                monitorState.mediaSource.onsourceopen = null;
+                monitorState.mediaSource = null;
+            }
+            if (monitorState.objectUrl) {
+                URL.revokeObjectURL(monitorState.objectUrl);
+                monitorState.objectUrl = null;
+            }
+            monitorState.queue = [];
+            deviceMonitorVideo.removeAttribute("src");
+            deviceMonitorVideo.load();
+        }
+
+        function setupDeviceMonitorMedia() {
+            resetDeviceMonitorMedia();
+            const mediaSource = new MediaSource();
+            monitorState.mediaSource = mediaSource;
+            monitorState.objectUrl = URL.createObjectURL(mediaSource);
+            deviceMonitorVideo.src = monitorState.objectUrl;
+            mediaSource.addEventListener("sourceopen", () => {
+                if (monitorState.sourceBuffer || monitorState.mediaSource !== mediaSource) {
+                    return;
+                }
+                const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.64001F"');
+                sourceBuffer.mode = "segments";
+                sourceBuffer.addEventListener("updateend", flushDeviceMonitorQueue);
+                monitorState.sourceBuffer = sourceBuffer;
+                flushDeviceMonitorQueue();
+            }, { once: true });
+        }
+
+        function flushDeviceMonitorQueue() {
+            const sourceBuffer = monitorState.sourceBuffer;
+            if (!sourceBuffer || sourceBuffer.updating || !monitorState.queue.length) {
+                return;
+            }
+            const next = monitorState.queue.shift();
+            try {
+                sourceBuffer.appendBuffer(next);
+            } catch (error) {
+                setDeviceMonitorState("连接异常", `视频缓冲失败：${error.message || error}`, true);
+                stopDeviceMonitorStream();
+            }
+        }
+
+        function enqueueDeviceMonitorChunk(chunk) {
+            monitorState.queue.push(chunk);
+            flushDeviceMonitorQueue();
+        }
+
+        function setDeviceMonitorState(label, detail, bad = false) {
+            deviceMonitorPill.className = bad ? "pill bad" : "pill";
+            deviceMonitorPill.textContent = label;
+            deviceMonitorStatus.textContent = detail;
+            renderDeviceMonitorButtons();
+        }
+
+        function stopDeviceMonitorStream() {
+            if (monitorState.reconnectTimer) {
+                clearTimeout(monitorState.reconnectTimer);
+                monitorState.reconnectTimer = null;
+            }
+            if (monitorState.socket) {
+                monitorState.socket.onclose = null;
+                monitorState.socket.close();
+                monitorState.socket = null;
+            }
+            monitorState.isOpening = false;
+            resetDeviceMonitorMedia();
+            setDeviceMonitorStage("准备连接手机画面", "点击“打开监控”后会通过 H264 实时传输手机屏幕。", true);
+            renderDeviceMonitorAvailability();
+        }
+
+        function scheduleDeviceMonitorReconnect() {
+            if (!monitorState.active || !monitorState.supported || switchState.task?.status === "running") {
+                return;
+            }
+            if (monitorState.reconnectTimer || monitorState.socket) {
+                return;
+            }
+            monitorState.reconnectTimer = setTimeout(() => {
+                monitorState.reconnectTimer = null;
+                if (monitorState.active) {
+                    startDeviceMonitorStream();
+                }
+            }, 1500);
+        }
+
+        function startDeviceMonitorStream() {
+            if (!monitorState.supported) {
+                setNotice("手机屏幕监控仅支持桌面 Chromium 浏览器。", true);
+                return;
+            }
+            if (!monitorState.health?.available) {
+                setNotice(monitorState.health?.reason || "手机监控当前不可用", true);
+                renderDeviceMonitorAvailability();
+                return;
+            }
+            if (switchState.task?.status === "running" || monitorState.socket || monitorState.isOpening) {
+                renderDeviceMonitorButtons();
+                return;
+            }
+            monitorState.isOpening = true;
+            setupDeviceMonitorMedia();
+            renderDeviceMonitorButtons();
+            setDeviceMonitorStage("正在建立视频通道", "浏览器正在连接后端 WebSocket，并准备接收 H264 画面。", true);
+            setDeviceMonitorState("连接中", "正在打开手机监控...", false);
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const socket = new WebSocket(`${protocol}//${window.location.host}/api/device/monitor/ws`);
+            socket.binaryType = "arraybuffer";
+            monitorState.socket = socket;
+            socket.onopen = () => {
+                monitorState.isOpening = false;
+                renderDeviceMonitorButtons();
+            };
+            socket.onmessage = (event) => {
+                if (typeof event.data === "string") {
+                    const message = JSON.parse(event.data);
+                    if (message.type === "status") {
+                        setDeviceMonitorState("已连接", message.status === "streaming" ? "手机画面正在实时传输。" : "正在准备视频流。");
+                        if (message.status === "streaming") {
+                            setDeviceMonitorStage("实时画面已连接", "点击手机画面即可发送 tap，右侧按钮可执行基础遥控。", false);
+                        }
+                        return;
+                    }
+                    if (message.type === "error") {
+                        setDeviceMonitorState("连接失败", message.reason || "手机监控连接失败", true);
+                        setDeviceMonitorStage("连接失败", message.reason || "手机监控连接失败", true);
+                        return;
+                    }
+                    if (message.type === "stopped") {
+                        setDeviceMonitorState("已断开", message.reason || "手机监控已关闭", true);
+                        setDeviceMonitorStage("监控已关闭", message.reason || "手机监控已关闭", true);
+                        return;
+                    }
+                    return;
+                }
+                enqueueDeviceMonitorChunk(new Uint8Array(event.data));
+            };
+            socket.onclose = () => {
+                monitorState.socket = null;
+                monitorState.isOpening = false;
+                renderDeviceMonitorButtons();
+                if (switchState.task?.status === "running") {
+                    setDeviceMonitorState("已禁用", "eSIM 切换进行中，监控已自动关闭。", true);
+                    setDeviceMonitorStage("监控已暂停", "eSIM 切换进行中，手机监控已自动关闭。", true);
+                    return;
+                }
+                if (monitorState.active) {
+                    scheduleDeviceMonitorReconnect();
+                }
+            };
+            socket.onerror = () => {
+                setDeviceMonitorState("连接异常", "视频连接发生异常，准备重连。", true);
+            };
+        }
+
+        async function sendDeviceMonitorAction(action) {
+            if (!monitorState.socket || monitorState.isControlling) {
+                return;
+            }
+            monitorState.isControlling = true;
+            renderDeviceMonitorButtons();
+            try {
+                await fetchJson("/api/device/monitor/control/action", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action }),
+                });
+                setNotice(`已发送遥控命令：${action}`);
+            } catch (error) {
+                setNotice(`遥控失败：${error.message}`, true);
+                if ((error.message || "").includes("切换进行中")) {
+                    stopDeviceMonitorStream();
+                }
+            } finally {
+                monitorState.isControlling = false;
+                renderDeviceMonitorButtons();
+            }
+        }
+
+        async function sendDeviceMonitorTap(event) {
+            if (!monitorState.socket || switchState.task?.status === "running") {
+                return;
+            }
+            const rect = deviceMonitorVideo.getBoundingClientRect();
+            if (!rect.width || !rect.height) {
+                return;
+            }
+            const xRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+            const yRatio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+            try {
+                await fetchJson("/api/device/monitor/control/tap", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ x_ratio: xRatio, y_ratio: yRatio }),
+                });
+            } catch (error) {
+                setNotice(`点击遥控失败：${error.message}`, true);
+            }
         }
 
         function renderMonitor(status) {
@@ -1663,6 +2556,8 @@
             document.getElementById("monitor-last-hit-at").textContent = formatLocalDateTime(status.last_sms_log_hit_at);
             document.getElementById("monitor-last-hit-source").textContent = `Buffer: ${status.last_sms_log_hit_buffer || status.active_log_buffers?.join(", ") || "-"}`;
             document.getElementById("monitor-log-hit-summary").textContent = `最近命中的短信日志摘要：${status.last_sms_log_hit_line || "-"}`;
+            mobileMonitorPill.className = status.connected ? "pill" : "pill bad";
+            mobileMonitorPill.textContent = status.connected ? "实时监听中" : "监听未连接";
         }
 
         function renderMonitorError(message) {
@@ -1672,6 +2567,8 @@
             document.getElementById("monitor-last-hit-at").textContent = "-";
             document.getElementById("monitor-last-hit-source").textContent = "Buffer: -";
             document.getElementById("monitor-log-hit-summary").textContent = `最近命中的短信日志摘要：${message}`;
+            mobileMonitorPill.className = "pill bad";
+            mobileMonitorPill.textContent = "监听失败";
         }
 
         function hashHue(value) {
@@ -1737,6 +2634,7 @@
             document.getElementById("esim-total").textContent = String(data.embedded_total_count);
             document.getElementById("esim-active").textContent = String(data.embedded_active_count);
             document.getElementById("esim-sync-at").textContent = formatLocalDateTime(data.collected_at);
+            mobileEsimSyncAt.textContent = formatLocalDateTime(data.collected_at);
             const names = [...new Set(data.subscriptions.map((item) => item.display_name).filter(Boolean))];
             const currentValue = displayNameFilter.value;
             displayNameFilter.innerHTML = '<option value="">全部名称</option>';
@@ -1752,17 +2650,36 @@
                 displayNameFilter.value = "";
                 smsState.displayName = "";
             }
+            renderMobileCurrentEsim(data);
             renderEsimTable();
             renderSwitchConfirmOverlay();
             renderKeepaliveFormOptions();
+        }
+
+        function renderMobileCurrentEsim(data) {
+            const activeItem = data?.subscriptions?.find((item) => item.is_active) || null;
+            mobileEsimSummary.textContent = data?.subscriptions?.length
+                ? `共 ${data.embedded_total_count} 张 eSIM，可切换 ${Math.max(0, data.embedded_total_count - data.embedded_active_count)} 张`
+                : "暂无 eSIM 记录";
+            if (!activeItem) {
+                mobileCurrentEsimName.textContent = "暂无激活 eSIM";
+                mobileCurrentEsimMeta.textContent = "运营商 / Sub ID -";
+                mobileCurrentEsimRemark.textContent = "暂无备注";
+                return;
+            }
+            mobileCurrentEsimName.textContent = activeItem.display_name || "未命名 eSIM";
+            mobileCurrentEsimMeta.textContent = `${activeItem.carrier_name || "运营商未知"} · Sub ID ${activeItem.sub_id}`;
+            mobileCurrentEsimRemark.textContent = activeItem.remark ? `备注：${activeItem.remark}` : "暂无备注";
         }
 
         function renderEsimTable() {
             const data = switchState.latestEsim;
             const list = document.getElementById("esim-table-body");
             list.innerHTML = "";
+            mobileEsimList.innerHTML = "";
             if (!data || !data.subscriptions?.length) {
                 list.innerHTML = '<div class="meta">暂无 eSIM 记录</div>';
+                mobileEsimList.innerHTML = '<div class="meta">暂无 eSIM 记录</div>';
                 renderSwitchConfirmOverlay();
                 return;
             }
@@ -1797,32 +2714,88 @@
                 const slotText = item.sim_slot_index === null || item.sim_slot_index === undefined
                     ? ""
                     : ` · 卡槽 ${item.sim_slot_index}`;
+                const remarkText = (item.remark || "").trim();
                 card.className = selected ? "esim-item selected" : "esim-item";
                 card.innerHTML = `
                     <div class="esim-item-top">
-                        <div class="esim-item-name">${item.display_name || "-"}</div>
+                        <div class="esim-item-name">${escapeHtml(item.display_name || "-")}</div>
                         <div class="esim-item-status">${isActive ? "当前激活" : "未激活"}</div>
                     </div>
-                    <div class="esim-item-carrier">${item.carrier_name || "运营商未知"} · Sub ID ${item.sub_id}</div>
+                    <div class="esim-item-carrier">${escapeHtml(item.carrier_name || "运营商未知")} · Sub ID ${escapeHtml(item.sub_id)}</div>
                     <div class="esim-item-meta">
                         <span class="${kindClass}">${kindLabel}</span>
                         <span>${isEmbedded ? "可用于 eSIM 切换" : `非 eSIM${slotText}`}</span>
                     </div>
-                    <button
-                        class="switch-btn secondary"
-                        type="button"
-                        data-display-name="${item.display_name || ""}"
-                        ${disabled ? "disabled" : ""}
-                    >
-                        ${buttonText}
-                    </button>
+                    <div class="esim-item-remark ${remarkText ? "" : "empty"}">${remarkText ? `备注：${escapeHtml(remarkText)}` : "暂无备注"}</div>
+                    <div class="esim-item-actions">
+                        <button
+                            class="switch-btn secondary"
+                            type="button"
+                            data-display-name="${escapeHtml(item.display_name || "")}"
+                            ${disabled ? "disabled" : ""}
+                        >
+                            ${buttonText}
+                        </button>
+                        <button
+                            class="switch-btn ghost remark-btn"
+                            type="button"
+                            data-sub-id="${escapeHtml(item.sub_id)}"
+                            ${switchState.isSubmittingConfirm ? "disabled" : ""}
+                        >
+                            备注
+                        </button>
+                    </div>
                 `;
                 list.appendChild(card);
+
+                if (!isActive && isEmbedded) {
+                    const mobileCard = document.createElement("div");
+                    mobileCard.className = selected ? "mobile-esim-item selected" : "mobile-esim-item";
+                    mobileCard.innerHTML = `
+                        <div class="mobile-esim-item-top">
+                            <div class="mobile-esim-item-name">${escapeHtml(item.display_name || "-")}</div>
+                            <div class="pill ${lockActive ? "warn" : ""}">${buttonText}</div>
+                        </div>
+                        <div class="meta">${escapeHtml(item.carrier_name || "运营商未知")} · Sub ID ${escapeHtml(item.sub_id)}</div>
+                        <div class="mobile-esim-item-body">${remarkText ? `备注：${escapeHtml(remarkText)}` : "暂无备注"}</div>
+                        <div class="mobile-esim-actions">
+                            <button
+                                class="switch-btn secondary"
+                                type="button"
+                                data-display-name="${escapeHtml(item.display_name || "")}"
+                                ${disabled ? "disabled" : ""}
+                            >
+                                ${buttonText}
+                            </button>
+                            <button
+                                class="switch-btn ghost remark-btn"
+                                type="button"
+                                data-sub-id="${escapeHtml(item.sub_id)}"
+                                ${switchState.isSubmittingConfirm ? "disabled" : ""}
+                            >
+                                备注
+                            </button>
+                        </div>
+                    `;
+                    mobileEsimList.appendChild(mobileCard);
+                }
             }
 
             list.querySelectorAll(".switch-btn[data-display-name]").forEach((button) => {
                 button.addEventListener("click", () => selectSwitchTarget(button.dataset.displayName));
             });
+            list.querySelectorAll(".remark-btn[data-sub-id]").forEach((button) => {
+                button.addEventListener("click", () => openRemarkOverlay(button.dataset.subId));
+            });
+            mobileEsimList.querySelectorAll(".switch-btn[data-display-name]").forEach((button) => {
+                button.addEventListener("click", () => selectSwitchTarget(button.dataset.displayName));
+            });
+            mobileEsimList.querySelectorAll(".remark-btn[data-sub-id]").forEach((button) => {
+                button.addEventListener("click", () => openRemarkOverlay(button.dataset.subId));
+            });
+            if (!mobileEsimList.children.length) {
+                mobileEsimList.innerHTML = '<div class="meta">当前没有可切换的 eSIM</div>';
+            }
             renderSwitchConfirmOverlay();
         }
 
@@ -1836,6 +2809,14 @@
             switchState.pendingDisplayName = null;
             const list = document.getElementById("esim-table-body");
             list.innerHTML = `<div class="meta">${message}</div>`;
+            mobileEsimSummary.textContent = "eSIM 状态读取失败";
+            mobileEsimSyncAt.textContent = "-";
+            mobileCurrentEsimName.textContent = "读取失败";
+            mobileCurrentEsimMeta.textContent = message;
+            mobileCurrentEsimRemark.textContent = "-";
+            mobileEsimStatusPill.className = "pill bad";
+            mobileEsimStatusPill.textContent = "读取失败";
+            mobileEsimList.innerHTML = `<div class="meta">${message}</div>`;
             renderSwitchConfirmOverlay();
         }
 
@@ -1848,12 +2829,19 @@
             prevPageBtn.disabled = data.page <= 1;
             nextPageBtn.disabled = data.page >= totalPages;
             document.getElementById("sms-summary").textContent = `数据库共 ${data.total} 条历史短信，当前显示第 ${data.page} 页，每页 ${data.page_size} 条`;
+            mobileSmsSummary.textContent = data.items.length
+                ? `最新 ${Math.min(data.items.length, data.page_size)} 条短信`
+                : "暂无短信记录";
             const tbody = document.getElementById("sms-table-body");
             tbody.innerHTML = "";
+            mobileSmsList.innerHTML = "";
             if (!data.items.length) {
                 tbody.innerHTML = '<tr><td colspan="5" class="meta">暂无短信记录</td></tr>';
+                mobileSmsList.innerHTML = '<div class="meta">暂无短信记录</div>';
+                renderRealtimeSms();
                 return;
             }
+            realtimeSmsState.latestMessage = data.items[0] || null;
             for (const item of data.items) {
                 const row = document.createElement("tr");
                 row.innerHTML = `
@@ -1864,7 +2852,20 @@
                     <td class="sms-body">${item.body || ""}</td>
                 `;
                 tbody.appendChild(row);
+
+                const mobileCard = document.createElement("div");
+                mobileCard.className = "mobile-sms-item";
+                mobileCard.innerHTML = `
+                    <div class="mobile-sms-item-top">
+                        <div class="mobile-sms-item-sender">${escapeHtml(item.address || item.display_name || "未知发送方")}</div>
+                        <div class="meta">${formatLocalDateTime(item.date_ts)}</div>
+                    </div>
+                    <div class="meta">${escapeHtml(item.display_name || "未关联 eSIM")} · 短信 ID ${escapeHtml(item.sms_id)}</div>
+                    <div class="mobile-sms-item-body">${escapeHtml(item.body || "")}</div>
+                `;
+                mobileSmsList.appendChild(mobileCard);
             }
+            renderRealtimeSms();
         }
 
         function renderSmsError(message) {
@@ -1874,6 +2875,46 @@
             document.getElementById("sms-summary").textContent = "短信列表读取失败";
             const tbody = document.getElementById("sms-table-body");
             tbody.innerHTML = `<tr><td colspan="5" class="meta">${message}</td></tr>`;
+            mobileSmsSummary.textContent = "短信列表读取失败";
+            mobileSmsList.innerHTML = `<div class="meta">${message}</div>`;
+            if (!realtimeSmsState.latestEvent) {
+                mobileRealtimeSummary.textContent = "实时短信读取失败";
+                mobileRealtimeSender.textContent = "暂无实时短信";
+                mobileRealtimeTime.textContent = "-";
+                mobileRealtimeMeta.innerHTML = `<span>${escapeHtml(message)}</span>`;
+                mobileRealtimeBody.textContent = "等待下一条实时短信。";
+            }
+        }
+
+        function renderRealtimeSms() {
+            const event = realtimeSmsState.latestEvent;
+            const latestMessage = realtimeSmsState.latestMessage;
+            if (!event && !latestMessage) {
+                mobileRealtimeSummary.textContent = "等待实时短信";
+                mobileRealtimeSender.textContent = "暂无实时短信";
+                mobileRealtimeTime.textContent = "-";
+                mobileRealtimeMeta.innerHTML = "<span>等待新短信事件</span>";
+                mobileRealtimeBody.textContent = "新短信到达后会在这里实时更新。";
+                return;
+            }
+
+            const sender = event?.latest_address || event?.latest_display_name || latestMessage?.address || latestMessage?.display_name || "新短信";
+            const occurredAt = event?.occurred_at || latestMessage?.date_ts || null;
+            const sourceLabel = event?.event_source === "poll" ? "轮询检测" : event?.event_source === "monitor" ? "实时监听" : "最新短信";
+            const insertedCount = event?.inserted_count || 1;
+            const body = latestMessage?.body || "已收到新短信，正文将在最新短信列表中显示。";
+
+            mobileRealtimeSummary.textContent = event
+                ? `${sourceLabel} · 新增 ${insertedCount} 条`
+                : "当前展示最新一条短信";
+            mobileRealtimeSender.textContent = sender;
+            mobileRealtimeTime.textContent = formatLocalDateTime(occurredAt);
+            mobileRealtimeMeta.innerHTML = `
+                <span>${sourceLabel}</span>
+                <span>${event?.latest_display_name || latestMessage?.display_name || "未关联 eSIM"}</span>
+                <span>${insertedCount} 条</span>
+            `;
+            mobileRealtimeBody.textContent = body;
         }
 
         function renderKeepalive(data) {
@@ -2003,6 +3044,24 @@
             switchLogSummary.textContent = logs.length
                 ? `最近 ${Math.min(logs.length, 30)} 条切换记录，最新一条：${formatLocalDateTime(logs[0].created_at)}`
                 : "最近暂无切换记录";
+            mobileEsimStatusPill.className = lockActive ? "pill warn" : status.status === "running" ? "pill" : "pill";
+            mobileEsimStatusPill.textContent = lockActive
+                ? `锁定中 · ${formatRemainingDuration(status.lock_remaining_seconds)}`
+                : status.status === "running"
+                    ? "切换进行中"
+                    : "可切换";
+            mobileLockRemaining.textContent = lockActive
+                ? formatRemainingDuration(status.lock_remaining_seconds)
+                : status.status === "running"
+                    ? "进行中"
+                    : "未锁定";
+            mobileLockNote.textContent = lockActive
+                ? `最近目标 ${latestTarget}，锁定至 ${formatLocalDateTime(status.lock_until)}`
+                : status.status === "running"
+                    ? `${status.target_display_name || latestTarget} 正在切换`
+                    : logs.length
+                        ? `最近一次切换：${formatSwitchEventLabel(logs[0])} · ${formatLocalDateTime(logs[0].created_at)}`
+                        : "当前未锁定，可直接选择目标 eSIM 发起切换。";
 
             switchLogList.innerHTML = "";
             if (!logs.length) {
@@ -2098,11 +3157,13 @@
         }
 
         async function loadSmsPage(page = smsState.page) {
+            const requestedPage = viewState.isMobileView ? 1 : page;
+            const requestedPageSize = viewState.isMobileView ? 10 : smsState.pageSize;
             const params = new URLSearchParams({
-                page: String(page),
-                page_size: String(smsState.pageSize),
+                page: String(requestedPage),
+                page_size: String(requestedPageSize),
             });
-            if (smsState.displayName) {
+            if (!viewState.isMobileView && smsState.displayName) {
                 params.set("display_name", smsState.displayName);
             }
             const sms = await fetchJson(`/api/sms?${params.toString()}`);
@@ -2142,6 +3203,10 @@
                 switchLockPill.textContent = "切换状态读取失败";
                 switchLogSummary.textContent = `切换状态读取失败：${error.message}`;
                 switchLogList.innerHTML = `<div class="meta">${error.message}</div>`;
+                mobileEsimStatusPill.className = "pill bad";
+                mobileEsimStatusPill.textContent = "状态失败";
+                mobileLockRemaining.textContent = "-";
+                mobileLockNote.textContent = `切换状态读取失败：${error.message}`;
                 return { ok: false, error: `切换状态读取失败：${error.message}` };
             }
         }
@@ -2180,6 +3245,23 @@
         }
 
         async function loadDashboard() {
+            if (viewState.isMobileView) {
+                const [esimResult, switchResult, monitorResult, smsResult] = await Promise.all([
+                    loadEsimSection(),
+                    loadSwitchSection(),
+                    loadMonitorSection(),
+                    loadSmsSection(1),
+                ]);
+                const failures = [esimResult, switchResult, monitorResult, smsResult]
+                    .filter((result) => !result.ok)
+                    .map((result) => result.error);
+                if (failures.length) {
+                    setNotice(`部分数据加载失败：${failures.join("；")}`, true);
+                    return;
+                }
+                setNotice("移动端数据已刷新");
+                return;
+            }
             const [healthResult, esimResult, switchResult, monitorResult, smsResult, keepaliveResult] = await Promise.all([
                 loadHealthSection(),
                 loadEsimSection(),
@@ -2208,11 +3290,12 @@
             openKeepaliveBtn.disabled = disabled && !keepaliveState.active;
             syncSmsBtn.disabled = disabled;
             displayNameFilter.disabled = disabled;
-            prevPageBtn.disabled = disabled || prevPageBtn.disabled;
-            nextPageBtn.disabled = disabled || nextPageBtn.disabled;
+            prevPageBtn.disabled = viewState.isMobileView ? true : disabled || prevPageBtn.disabled;
+            nextPageBtn.disabled = viewState.isMobileView ? true : disabled || nextPageBtn.disabled;
             document.body.style.overflow = disabled ? "hidden" : "";
             renderEsimTable();
             renderSwitchConfirmOverlay();
+            renderDeviceMonitorButtons();
         }
 
         function renderKeepaliveFormOptions() {
@@ -2278,8 +3361,72 @@
             keepaliveState.isSubmitting = false;
             keepaliveSubmitBtn.textContent = "保存规则";
             keepaliveSubmitBtn.disabled = false;
-            if (!switchState.active) {
+            if (!switchState.active && !remarkState.active) {
                 setInteractiveDisabled(false);
+            }
+        }
+
+        function openRemarkOverlay(subId) {
+            const current = (switchState.latestEsim?.subscriptions || []).find((item) => item.sub_id === subId);
+            if (!current) {
+                setNotice("未找到目标卡片", true);
+                return;
+            }
+            remarkState.active = true;
+            remarkState.editingSubId = subId;
+            remarkDisplayName.textContent = current.display_name || "-";
+            remarkCarrierSubId.textContent = `${current.carrier_name || "运营商未知"} · Sub ID ${current.sub_id}`;
+            remarkSubtitle.textContent = `为 ${current.display_name || current.sub_id} 设置备注，仅用于当前列表展示。`;
+            remarkInput.value = current.remark || "";
+            remarkOverlay.classList.add("active");
+            setInteractiveDisabled(true);
+            setTimeout(() => remarkInput.focus(), 0);
+        }
+
+        function closeRemarkOverlay() {
+            if (remarkState.isSubmitting) {
+                return;
+            }
+            closeRemarkOverlayForce();
+        }
+
+        function closeRemarkOverlayForce() {
+            remarkOverlay.classList.remove("active");
+            remarkState.active = false;
+            remarkState.editingSubId = null;
+            remarkState.isSubmitting = false;
+            remarkSubmitBtn.textContent = "保存备注";
+            remarkSubmitBtn.disabled = false;
+            if (!switchState.active && !keepaliveState.active) {
+                setInteractiveDisabled(false);
+            }
+        }
+
+        async function saveRemark() {
+            const subId = remarkState.editingSubId;
+            if (!subId) {
+                setNotice("未找到目标卡片", true);
+                return;
+            }
+            const remark = remarkInput.value.slice(0, 100);
+            remarkState.isSubmitting = true;
+            remarkSubmitBtn.textContent = "保存中...";
+            remarkSubmitBtn.disabled = true;
+            try {
+                await fetchJson(`/api/esim/remarks/${encodeURIComponent(subId)}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ remark }),
+                });
+                await loadEsimSection();
+                setNotice("备注已保存");
+                closeRemarkOverlayForce();
+            } catch (error) {
+                setNotice(`备注保存失败：${error.message}`, true);
+            } finally {
+                remarkState.isSubmitting = false;
+                remarkSubmitBtn.textContent = "保存备注";
+                remarkSubmitBtn.disabled = false;
             }
         }
 
@@ -2438,13 +3585,18 @@
                 }
                 switchStepList.appendChild(li);
             }
-            const previewUrl = getSwitchPreviewUrl(task, done);
-            if (previewUrl) {
-                switchPreviewImage.src = `${previewUrl}?t=${Date.now()}`;
+            if (!viewState.isMobileView) {
+                const previewUrl = getSwitchPreviewUrl(task, done);
+                if (previewUrl) {
+                    switchPreviewImage.src = `${previewUrl}?t=${Date.now()}`;
+                } else {
+                    switchPreviewImage.removeAttribute("src");
+                }
             } else {
                 switchPreviewImage.removeAttribute("src");
             }
             switchOverlayClose.disabled = !done;
+            renderDeviceMonitorAvailability();
             if (done) {
                 setInteractiveDisabled(false);
                 if (task.status === "succeeded") {
@@ -2478,6 +3630,8 @@
             switchConfirmOverlay.classList.remove("active");
             switchState.confirmActive = false;
             switchOverlay.classList.add("active");
+            switchOverlay.classList.toggle("mobile-text-only", viewState.isMobileView);
+            switchPreviewPanel.style.display = viewState.isMobileView ? "none" : "";
             setInteractiveDisabled(true);
             switchState.active = true;
             scheduleSwitchStatusPolling();
@@ -2625,12 +3779,17 @@
                 return;
             }
             smsEventState.lastHandledEventKey = eventKey;
+            realtimeSmsState.latestEvent = payload;
             const count = payload.inserted_count || 0;
             const sender = payload.latest_address || payload.latest_display_name || "新短信";
             const sourceLabel = payload.event_source === "poll" ? "轮询检测" : "实时监听";
-            showSmsToast(`${sourceLabel}：收到 ${count} 条新短信，来自 ${sender}，已自动刷新`);
+            const toastMessage = viewState.isMobileView
+                ? `${sender} 收到 ${count} 条新短信`
+                : `${sourceLabel}：收到 ${count} 条新短信，来自 ${sender}，已自动刷新`;
+            showSmsToast(toastMessage);
+            renderRealtimeSms();
             try {
-                const result = await loadSmsSection(smsState.page);
+                const result = await loadSmsSection(viewState.isMobileView ? 1 : smsState.page);
                 if (!result.ok) {
                     setNotice(result.error, true);
                 }
@@ -2713,6 +3872,9 @@
         }
 
         function ensureCollabConnection() {
+            if (viewState.isMobileView) {
+                return;
+            }
             if (!authState.authenticated || !ensureCollabIdentity() || collabState.socket || collabState.isConnecting) {
                 return;
             }
@@ -2799,6 +3961,7 @@
             source.addEventListener("task_started", (event) => {
                 openSwitchOverlay();
                 renderSwitchStatus(JSON.parse(event.data));
+                stopDeviceMonitorStream();
             });
             source.addEventListener("step", (event) => {
                 renderSwitchStatus(JSON.parse(event.data));
@@ -2806,6 +3969,7 @@
             source.addEventListener("task_succeeded", async (event) => {
                 renderSwitchStatus(JSON.parse(event.data));
                 await loadEsimSection();
+                await loadHealthSection();
             });
             source.addEventListener("task_failed", (event) => {
                 renderSwitchStatus(JSON.parse(event.data));
@@ -2904,12 +4068,22 @@
 
         syncEsimBtn.addEventListener("click", () => runAction(syncEsimBtn, "/api/esim/sync", "eSIM 同步"));
         openKeepaliveBtn.addEventListener("click", () => openKeepaliveOverlay());
+        openDeviceMonitorBtn.addEventListener("click", () => openDeviceMonitorOverlay());
         syncSmsBtn.addEventListener("click", () => runAction(syncSmsBtn, "/api/sms/sync-all", "历史短信全量同步"));
         switchConfirmCancel.addEventListener("click", closeSwitchConfirmOverlay);
         switchOverlayClose.addEventListener("click", closeSwitchOverlay);
+        deviceMonitorClose.addEventListener("click", closeDeviceMonitorOverlay);
+        deviceMonitorOpenStreamBtn.addEventListener("click", () => startDeviceMonitorStream());
+        deviceMonitorStopStreamBtn.addEventListener("click", () => stopDeviceMonitorStream());
         keepaliveCancelBtn.addEventListener("click", closeKeepaliveOverlay);
         keepaliveSubmitBtn.addEventListener("click", saveKeepaliveRule);
+        remarkCancelBtn.addEventListener("click", closeRemarkOverlay);
+        remarkSubmitBtn.addEventListener("click", saveRemark);
         keepaliveEsimSelect.addEventListener("change", updateKeepalivePreview);
+        deviceMonitorVideo.addEventListener("click", sendDeviceMonitorTap);
+        deviceMonitorActionButtons.forEach((button) => {
+            button.addEventListener("click", () => sendDeviceMonitorAction(button.dataset.monitorAction));
+        });
         switchConfirmSubmit.addEventListener("click", async () => {
             await startEsimSwitch(switchState.pendingDisplayName, getSelectedLockMinutes());
         });
@@ -2979,8 +4153,11 @@
                     hideAuthOverlay();
                     ensureSwitchEventStream();
                     ensureSmsEventStream();
-                    ensureCollabConnection();
-                    scheduleKeepaliveRefresh();
+                    renderDeviceMonitorAvailability();
+                    if (!viewState.isMobileView) {
+                        ensureCollabConnection();
+                        scheduleKeepaliveRefresh();
+                    }
                     await loadDashboard();
                 }
             } catch (error) {
@@ -3015,7 +4192,26 @@
         });
 
         pageEl.addEventListener("mousemove", maybeSendCursor);
-        window.addEventListener("resize", renderCollab);
+        window.addEventListener("resize", async () => {
+            const nextMobileView = detectMobileView();
+            if (nextMobileView !== viewState.isMobileView) {
+                viewState.isMobileView = nextMobileView;
+                applyViewMode();
+                disconnectCollab();
+                renderDeviceMonitorAvailability();
+                if (authState.authenticated) {
+                    if (!viewState.isMobileView) {
+                        ensureCollabConnection();
+                        scheduleKeepaliveRefresh();
+                    } else {
+                        clearKeepaliveRefresh();
+                        hideNameOverlay();
+                    }
+                    await loadDashboard();
+                }
+            }
+            renderCollab();
+        });
         document.addEventListener("visibilitychange", () => {
             if (!document.hidden) {
                 renderCollab();
@@ -3023,6 +4219,9 @@
         });
 
         (async () => {
+            viewState.isMobileView = detectMobileView();
+            applyViewMode();
+            renderDeviceMonitorAvailability();
             try {
                 const status = await fetchJson("/api/auth/status");
                 if (!status.authenticated) {
@@ -3032,8 +4231,11 @@
                 hideAuthOverlay();
                 ensureSwitchEventStream();
                 ensureSmsEventStream();
-                ensureCollabConnection();
-                scheduleKeepaliveRefresh();
+                 renderDeviceMonitorAvailability();
+                if (!viewState.isMobileView) {
+                    ensureCollabConnection();
+                    scheduleKeepaliveRefresh();
+                }
                 await loadDashboard();
             } catch (_) {
                 showAuthOverlay();
