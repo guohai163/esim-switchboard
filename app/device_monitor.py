@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import shutil
 import subprocess
 import threading
 import time
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from fastapi import WebSocket
 
@@ -25,10 +27,20 @@ ACTION_KEYCODE_MAP = {
     "volume_down": 25,
     "power": 26,
 }
+STDERR_TAIL_LIMIT = 16_384
+DIAGNOSTIC_LIMIT = 1_200
+ERROR_REASON_LIMIT = 240
+WAKE_DELAY_SECONDS = 0.4
+PROBE_CACHE_TTL_SECONDS = 5.0
+PROBE_TIMEOUT_SECONDS = 2.0
 
 
 class DeviceMonitorUnavailableError(RuntimeError):
     """Raised when the H264 device monitor pipeline cannot be started."""
+
+    def __init__(self, message: str, *, diagnostic: str | None = None) -> None:
+        super().__init__(message)
+        self.diagnostic = diagnostic
 
 
 class DeviceMonitorConflictError(RuntimeError):
@@ -39,30 +51,67 @@ class DeviceMonitorLockedError(RuntimeError):
     """Raised when a switch task blocks monitoring and remote control."""
 
 
+class _TextTailBuffer:
+    """Keep only the latest stderr text so long-running streams cannot grow unbounded."""
+
+    def __init__(self, limit: int = STDERR_TAIL_LIMIT) -> None:
+        self._limit = limit
+        self._size = 0
+        self._parts: deque[str] = deque()
+        self._lock = threading.Lock()
+
+    def append(self, text: str) -> None:
+        if not text:
+            return
+        with self._lock:
+            self._parts.append(text)
+            self._size += len(text)
+            while self._size > self._limit and self._parts:
+                overflow = self._size - self._limit
+                head = self._parts[0]
+                if len(head) <= overflow:
+                    self._parts.popleft()
+                    self._size -= len(head)
+                    continue
+                self._parts[0] = head[overflow:]
+                self._size -= overflow
+                break
+
+    def get_text(self) -> str:
+        with self._lock:
+            return "".join(self._parts).strip()
+
+
 @dataclass(slots=True)
 class ActiveMonitorSession:
-    """Tracks the single live video stream and its owned resources."""
+    """Tracks one live ffmpeg pipeline that mirrors the validated shell command."""
 
-    transport: str
     adb_process: subprocess.Popen[bytes]
     ffmpeg_process: subprocess.Popen[bytes]
-    pump_thread: threading.Thread
     websocket: WebSocket
     loop: asyncio.AbstractEventLoop
+    mime_codec: str
     stop_reason: str | None = None
+    adb_stderr_tail: _TextTailBuffer = field(default_factory=_TextTailBuffer)
+    ffmpeg_stderr_tail: _TextTailBuffer = field(default_factory=_TextTailBuffer)
+    stderr_threads: tuple[threading.Thread, ...] = ()
 
 
 class DeviceMonitorService:
-    """Owns the single-screen monitor session and lightweight remote controls."""
+    """Owns the single-screen monitor session and the light remote-control endpoints."""
 
     def __init__(self, config: AppConfig, adb_client: AdbClient) -> None:
         self.config = config
         self.adb_client = adb_client
         self._lock = threading.Lock()
         self._session: ActiveMonitorSession | None = None
+        self._probe_cache_lock = threading.Lock()
+        self._probe_cache_value: bool | None = None
+        self._probe_cache_reason: str | None = None
+        self._probe_cache_expires_at = 0.0
 
     def get_status(self, *, switch_running: bool) -> dict[str, Any]:
-        """Report availability and current session state for the dashboard."""
+        """Report availability and the current monitor slot status."""
 
         if switch_running:
             return {
@@ -99,12 +148,13 @@ class DeviceMonitorService:
             }
 
         try:
-            self.adb_client.wake_screen()
-            if not self._supports_h264_screenrecord():
+            self._wake_screen_for_monitor()
+            supported, probe_reason = self._supports_h264_screenrecord()
+            if not supported:
                 return {
                     "available": False,
                     "running": self.is_running(),
-                    "reason": "当前设备的 screenrecord 不支持 H264 直出",
+                    "reason": probe_reason or "当前设备的 screenrecord 不支持 H264 直出",
                     "browser_supported_hint": BROWSER_SUPPORTED_HINT,
                 }
         except Exception as exc:  # noqa: BLE001
@@ -123,13 +173,11 @@ class DeviceMonitorService:
         }
 
     def is_running(self) -> bool:
-        """Expose whether the single monitor slot is currently occupied."""
-
         with self._lock:
             return self._session is not None
 
     def start_session(self, websocket: WebSocket, *, switch_running: bool) -> ActiveMonitorSession:
-        """Reserve the single monitor slot and launch the stream subprocesses."""
+        """Reserve the single monitor slot and launch the minimal adb->ffmpeg pipeline."""
 
         if switch_running:
             raise DeviceMonitorLockedError("eSIM 切换进行中，暂时不能打开手机监控")
@@ -146,18 +194,17 @@ class DeviceMonitorService:
             return session
 
     def finish_session(self, session: ActiveMonitorSession) -> None:
-        """Release the monitor slot after the websocket ends."""
+        """Release the monitor slot after the websocket closes."""
 
         with self._lock:
             if self._session is session:
                 self._session = None
         self._terminate_process(session.ffmpeg_process)
         self._terminate_process(session.adb_process)
-        if session.pump_thread.is_alive():
-            session.pump_thread.join(timeout=1)
+        self._join_threads(session.stderr_threads, timeout=1)
 
     def force_stop(self, reason: str) -> None:
-        """Terminate the current monitor stream so switch automation can take over."""
+        """Terminate the current stream so UI automation can take over the phone."""
 
         with self._lock:
             session = self._session
@@ -168,16 +215,11 @@ class DeviceMonitorService:
         self._terminate_process(session.adb_process)
 
     def send_action(self, action: str, *, switch_running: bool) -> dict[str, Any]:
-        """Dispatch a lightweight remote-control key event through adb."""
-
         self._ensure_control_allowed(switch_running=switch_running)
-        keycode = ACTION_KEYCODE_MAP[action]
-        self.adb_client.send_keyevent(keycode)
+        self.adb_client.send_keyevent(ACTION_KEYCODE_MAP[action])
         return {"ok": True, "action": action}
 
     def send_tap(self, x_ratio: float, y_ratio: float, *, switch_running: bool) -> dict[str, Any]:
-        """Map normalized tap coordinates to the physical device screen."""
-
         self._ensure_control_allowed(switch_running=switch_running)
         width, height = self.adb_client.get_screen_size()
         x = min(width - 1, max(0, round(width * x_ratio)))
@@ -186,9 +228,10 @@ class DeviceMonitorService:
         return {"ok": True, "x": x, "y": y}
 
     async def stream_to_websocket(self, session: ActiveMonitorSession) -> None:
-        """Send status frames first, then binary fragmented MP4 chunks to the browser."""
+        """Send status, negotiated codec info, then binary fMP4 chunks."""
 
         await session.websocket.send_json({"type": "status", "status": "starting"})
+        await session.websocket.send_json({"type": "media", "mime_codec": session.mime_codec})
         await session.websocket.send_json({"type": "status", "status": "streaming"})
         try:
             while True:
@@ -197,14 +240,15 @@ class DeviceMonitorService:
                     break
                 await session.websocket.send_bytes(chunk)
         finally:
-            stderr_text = await self._collect_stderr(session)
             if session.stop_reason:
                 await session.websocket.send_json({"type": "stopped", "reason": session.stop_reason})
-            elif stderr_text:
-                await session.websocket.send_json({"type": "error", "reason": stderr_text})
-
-    def _spawn_session(self, websocket: WebSocket) -> ActiveMonitorSession:
-        return self._spawn_session_with_transport(websocket, transport="exec-out")
+            else:
+                reason, diagnostic = await self._collect_error_details(session)
+                if reason:
+                    payload: dict[str, Any] = {"type": "error", "reason": reason}
+                    if diagnostic:
+                        payload["diagnostic"] = diagnostic
+                    await session.websocket.send_json(payload)
 
     def _ensure_control_allowed(self, *, switch_running: bool) -> None:
         if switch_running:
@@ -219,330 +263,194 @@ class DeviceMonitorService:
             return None if Path(ffmpeg_path).exists() else f"FFmpeg executable not found: {ffmpeg_path}"
         return None if shutil.which(ffmpeg_path) else f"FFmpeg executable not found: {ffmpeg_path}"
 
-    def _supports_h264_screenrecord(self) -> bool:
-        """Probe the device instead of trusting help text, which is inconsistent across ROMs."""
+    def _wake_screen_for_monitor(self) -> None:
+        """Mirror the manual success recipe: wake first, then wait briefly for screenrecord to emit bytes."""
+
+        self.adb_client.wake_screen()
+        time.sleep(WAKE_DELAY_SECONDS)
+
+    def _supports_h264_screenrecord(self) -> tuple[bool, str | None]:
+        now = time.monotonic()
+        with self._probe_cache_lock:
+            if now < self._probe_cache_expires_at and self._probe_cache_value is not None:
+                return self._probe_cache_value, self._probe_cache_reason
 
         process = self.adb_client.open_h264_screenrecord(
-            bitrate=self.config.device_monitor_bitrate,
+            bitrate=self._screenrecord_bitrate_arg(),
             time_limit_seconds=1,
             transport="exec-out",
         )
         try:
-            stdout = process.stdout.read(64) if process.stdout is not None else b""
-            stderr = process.stderr.read().decode("utf-8", errors="ignore") if process.stderr is not None else ""
-            if stdout:
-                return True
+            stdout, stderr_bytes = process.communicate(timeout=PROBE_TIMEOUT_SECONDS)
+            stderr = stderr_bytes.decode("utf-8", errors="ignore") if stderr_bytes else ""
+            if stdout and not self._looks_like_mp4_container(stdout):
+                self._set_probe_cache(True, None)
+                return True, None
             lowered = stderr.lower()
             if any(marker in lowered for marker in ("unknown option", "unrecognized option", "invalid option", "error")):
-                return False
-            return False
+                reason = stderr.strip() or "当前设备的 screenrecord 不支持 H264 直出"
+                self._set_probe_cache(False, reason)
+                return False, reason
+            reason = "当前设备的 screenrecord 未输出 H264 数据"
+            self._set_probe_cache(False, reason)
+            return False, reason
+        except subprocess.TimeoutExpired:
+            self._terminate_process(process)
+            reason = "screenrecord 探测超时"
+            self._set_probe_cache(False, reason)
+            return False, reason
         finally:
             self._terminate_process(process)
 
-    def _spawn_session_with_transport(self, websocket: WebSocket, *, transport: str) -> ActiveMonitorSession:
-        self.adb_client.wake_screen()
+    def _spawn_session(self, websocket: WebSocket) -> ActiveMonitorSession:
+        self._wake_screen_for_monitor()
         adb_process = self.adb_client.open_h264_screenrecord(
-            bitrate=self.config.device_monitor_bitrate,
-            transport=transport,
+            bitrate=self._screenrecord_bitrate_arg(),
+            transport="exec-out",
         )
+        mime_codec = 'video/mp4; codecs="avc1.42E028"'
+        ffmpeg_process = self._spawn_ffmpeg(adb_process)
+        session = ActiveMonitorSession(
+            adb_process=adb_process,
+            ffmpeg_process=ffmpeg_process,
+            websocket=websocket,
+            loop=asyncio.get_running_loop(),
+            mime_codec=mime_codec,
+        )
+        session.stderr_threads = tuple(
+            thread
+            for thread in (
+                self._start_stderr_drain(adb_process.stderr, session.adb_stderr_tail, name="device-monitor-adb-stderr"),
+                self._start_stderr_drain(ffmpeg_process.stderr, session.ffmpeg_stderr_tail, name="device-monitor-ffmpeg-stderr"),
+            )
+            if thread is not None
+        )
+        if not self._ensure_pipeline_started(ffmpeg_process, adb_process):
+            self._terminate_process(ffmpeg_process)
+            self._terminate_process(adb_process)
+            self._join_threads(session.stderr_threads, timeout=0.5)
+            reason, diagnostic = self._build_error_details(session, fallback_reason="exec-out 模式启动后立即退出")
+            raise DeviceMonitorUnavailableError(reason, diagnostic=diagnostic)
+        return session
+
+    def _spawn_ffmpeg(self, adb_process: subprocess.Popen[bytes]) -> subprocess.Popen[bytes]:
         command = [
             self.config.ffmpeg_path,
             "-loglevel",
             "error",
-            "-probesize",
-            f"{max(512, self.config.device_monitor_buffer_kb * 8)}k",
-            "-analyzeduration",
-            "2000000",
             "-f",
             "h264",
-            "-fflags",
-            "+genpts",
-            "-use_wallclock_as_timestamps",
-            "1",
             "-i",
             "pipe:0",
             "-an",
             "-c:v",
-            "copy",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-tune",
+            "zerolatency",
+            "-vf",
+            "scale=720:-2",
+            "-b:v",
+            "2M",
+            "-maxrate",
+            "2M",
+            "-bufsize",
+            "4M",
+            "-profile:v",
+            "baseline",
+            "-level",
+            "4.0",
+            "-pix_fmt",
+            "yuv420p",
             "-movflags",
-            "frag_keyframe+empty_moov+default_base_moof",
+            "empty_moov+omit_tfhd_offset+default_base_moof+frag_every_frame",
             "-f",
             "mp4",
             "pipe:1",
         ]
         try:
-            ffmpeg_process = subprocess.Popen(
+            return subprocess.Popen(
                 command,
-                stdin=subprocess.PIPE,
+                stdin=adb_process.stdout,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                bufsize=0,
             )
         except FileNotFoundError as exc:
             self._terminate_process(adb_process)
             raise DeviceMonitorUnavailableError(f"FFmpeg executable not found: {self.config.ffmpeg_path}") from exc
-        pump_thread = threading.Thread(
-            target=self._pump_h264_stream,
-            args=(adb_process, ffmpeg_process),
-            name=f"device-monitor-pump-{transport}",
-            daemon=True,
-        )
-        pump_thread.start()
-        if not self._ensure_pipeline_started(ffmpeg_process, adb_process):
-            self._terminate_process(ffmpeg_process)
-            self._terminate_process(adb_process)
-            stderr = self._read_stderr(ffmpeg_process) or self._read_stderr(adb_process) or f"{transport} 模式启动后立即退出"
-            raise DeviceMonitorUnavailableError(stderr)
-        return ActiveMonitorSession(
-            transport=transport,
-            adb_process=adb_process,
-            ffmpeg_process=ffmpeg_process,
-            pump_thread=pump_thread,
-            websocket=websocket,
-            loop=asyncio.get_running_loop(),
-        )
+
+    def _extract_sps(self, payload: bytes) -> bytes | None:
+        start_positions: list[int] = []
+        for pattern in (b"\x00\x00\x00\x01", b"\x00\x00\x01"):
+            offset = 0
+            while True:
+                index = payload.find(pattern, offset)
+                if index == -1:
+                    break
+                start_positions.append(index)
+                offset = index + len(pattern)
+        if not start_positions:
+            return None
+        start_positions = sorted(set(start_positions))
+        for idx, start in enumerate(start_positions):
+            prefix_len = 4 if payload[start : start + 4] == b"\x00\x00\x00\x01" else 3
+            nal_start = start + prefix_len
+            nal_end = len(payload)
+            if idx + 1 < len(start_positions):
+                nal_end = start_positions[idx + 1]
+            nal = payload[nal_start:nal_end]
+            if nal and (nal[0] & 0x1F) == 7 and len(nal) >= 4:
+                return nal
+        return None
+
+    def _screenrecord_bitrate_arg(self) -> str | None:
+        """Match the manual success command by default: do not pass --bit-rate unless explicitly configured as integer bps."""
+
+        raw = (self.config.device_monitor_bitrate or "").strip()
+        if not raw:
+            return None
+        if not raw.isdigit():
+            return None
+        return raw
+
+    def _set_probe_cache(self, supported: bool, reason: str | None) -> None:
+        with self._probe_cache_lock:
+            self._probe_cache_value = supported
+            self._probe_cache_reason = reason
+            self._probe_cache_expires_at = time.monotonic() + PROBE_CACHE_TTL_SECONDS
 
     def _ensure_pipeline_started(self, ffmpeg_process: subprocess.Popen[bytes], adb_process: subprocess.Popen[bytes]) -> bool:
-        """Only fail fast on immediate process crashes; do not require MP4 bytes within a tiny window."""
-
         for _ in range(10):
             if ffmpeg_process.poll() is not None or adb_process.poll() is not None:
                 return False
             time.sleep(0.1)
         return True
 
-    def _pump_h264_stream(self, adb_process: subprocess.Popen[bytes], ffmpeg_process: subprocess.Popen[bytes]) -> None:
-        """Normalize adb screenrecord output before ffmpeg sees it."""
+    async def _collect_error_details(self, session: ActiveMonitorSession) -> tuple[str | None, str | None]:
+        await asyncio.to_thread(self._join_threads, session.stderr_threads, 0.2)
+        reason, diagnostic = self._build_error_details(session, fallback_reason=None)
+        if reason:
+            return reason, diagnostic
+        if self._has_unexpected_process_exit(session):
+            return "视频流已中断", diagnostic
+        return None, None
 
-        if adb_process.stdout is None or ffmpeg_process.stdin is None:
-            return
+    def _build_error_details(self, session: ActiveMonitorSession, *, fallback_reason: str | None) -> tuple[str, str | None]:
+        ffmpeg_stderr = self._stderr_snapshot(session.ffmpeg_process, session.ffmpeg_stderr_tail)
+        adb_stderr = self._stderr_snapshot(session.adb_process, session.adb_stderr_tail)
+        diagnostic_parts = [part for part in (ffmpeg_stderr, adb_stderr) if part]
+        diagnostic = self._trim_text(" | ".join(diagnostic_parts), DIAGNOSTIC_LIMIT) if diagnostic_parts else None
+        preferred = ffmpeg_stderr or adb_stderr or fallback_reason
+        if not preferred:
+            return "", diagnostic
+        return self._summarize_reason(preferred), diagnostic
 
-        source = adb_process.stdout
-        sink = ffmpeg_process.stdin
-        mode: str | None = None
-        buffer = b""
-        nal_length_size = 4
-
-        try:
-            while True:
-                chunk = source.read(65536)
-                if not chunk:
-                    break
-                if mode == "annexb":
-                    sink.write(chunk)
-                    sink.flush()
-                    continue
-
-                buffer += chunk
-                if mode is None:
-                    mode = self._detect_h264_stream_mode(buffer)
-                    if mode == "annexb":
-                        sink.write(buffer)
-                        sink.flush()
-                        buffer = b""
-                        continue
-                    if mode == "avcc_config":
-                        original_buffer = buffer
-                        annexb_prefix, buffer, nal_length_size = self._consume_avcc_config_record(buffer)
-                        if not annexb_prefix and buffer == original_buffer:
-                            mode = None
-                            continue
-                        if annexb_prefix:
-                            sink.write(annexb_prefix)
-                            sink.flush()
-                        mode = "avcc"
-                    if mode == "avcc_config_prefixed":
-                        original_buffer = buffer
-                        annexb_prefix, buffer, nal_length_size = self._consume_length_prefixed_avcc_config_record(buffer)
-                        if not annexb_prefix and buffer == original_buffer:
-                            mode = None
-                            continue
-                        if annexb_prefix:
-                            sink.write(annexb_prefix)
-                            sink.flush()
-                        mode = "avcc"
-
-                if mode == "avcc":
-                    payload, buffer = self._convert_avcc_buffer_to_annexb(buffer, nal_length_size=nal_length_size)
-                    if payload:
-                        sink.write(payload)
-                        sink.flush()
-                    continue
-
-                if len(buffer) >= 64:
-                    # Fall back to passthrough if we cannot confidently classify the stream.
-                    mode = "annexb"
-                    sink.write(buffer)
-                    sink.flush()
-                    buffer = b""
-            if mode == "avcc" and buffer:
-                payload, _ = self._convert_avcc_buffer_to_annexb(buffer, nal_length_size=nal_length_size, finalize=True)
-                if payload:
-                    sink.write(payload)
-                    sink.flush()
-        except Exception:  # noqa: BLE001
-            pass
-        finally:
-            try:
-                sink.close()
-            except Exception:  # noqa: BLE001
-                return
-
-    def _detect_h264_stream_mode(self, payload: bytes) -> str | None:
-        if b"\x00\x00\x00\x01" in payload[:16] or b"\x00\x00\x01" in payload[:16]:
-            return "annexb"
-        if self._looks_like_length_prefixed_avcc_config(payload):
-            return "avcc_config_prefixed"
-        if self._looks_like_avcc_config(payload):
-            return "avcc_config"
-        if len(payload) < 5:
-            return None
-        nal_size = int.from_bytes(payload[:4], "big")
-        nal_header = payload[4] & 0x1F
-        if 0 < nal_size <= 2_000_000 and nal_header in {1, 5, 6, 7, 8, 9, 12, 19, 20}:
-            return "avcc"
-        return None
-
-    def _looks_like_avcc_config(self, payload: bytes) -> bool:
+    def _looks_like_mp4_container(self, payload: bytes) -> bool:
         if len(payload) < 8:
             return False
-        if payload[0] != 1:
-            return False
-        # AVCDecoderConfigurationRecord layout:
-        # version(1) profile(1) compat(1) level(1) reserved+lengthSize(1) reserved+numSPS(1)
-        num_sps = payload[5] & 0x1F
-        return num_sps > 0 and self._can_fully_parse_avcc_config(payload)
-
-    def _looks_like_length_prefixed_avcc_config(self, payload: bytes) -> bool:
-        if len(payload) < 10:
-            return False
-        record_length = int.from_bytes(payload[:4], "big")
-        if record_length <= 0 or record_length > 512:
-            return False
-        if payload[4] != 1:
-            return False
-        if len(payload) < 4 + record_length:
-            return False
-        num_sps = payload[9] & 0x1F
-        return num_sps > 0
-
-    def _can_fully_parse_avcc_config(self, payload: bytes) -> bool:
-        if len(payload) < 8 or payload[0] != 1:
-            return False
-        cursor = 6
-        num_sps = payload[5] & 0x1F
-        for _ in range(num_sps):
-            if cursor + 2 > len(payload):
-                return False
-            sps_length = int.from_bytes(payload[cursor : cursor + 2], "big")
-            cursor += 2
-            if cursor + sps_length > len(payload):
-                return False
-            cursor += sps_length
-        if cursor >= len(payload):
-            return False
-        num_pps = payload[cursor]
-        cursor += 1
-        for _ in range(num_pps):
-            if cursor + 2 > len(payload):
-                return False
-            pps_length = int.from_bytes(payload[cursor : cursor + 2], "big")
-            cursor += 2
-            if cursor + pps_length > len(payload):
-                return False
-            cursor += pps_length
-        return True
-
-    def _consume_avcc_config_record(self, payload: bytes) -> tuple[bytes, bytes, int]:
-        if len(payload) < 8:
-            return b"", payload, 4
-
-        cursor = 0
-        if payload[cursor] != 1:
-            return b"", payload, 4
-        cursor += 4  # version/profile/compat/level
-        nal_length_size = (payload[cursor] & 0x03) + 1
-        cursor += 1  # lengthSizeMinusOne
-        if cursor >= len(payload):
-            return b"", payload, nal_length_size
-
-        num_sps = payload[cursor] & 0x1F
-        cursor += 1
-        output = bytearray()
-
-        for _ in range(num_sps):
-            if cursor + 2 > len(payload):
-                return b"", payload, nal_length_size
-            sps_length = int.from_bytes(payload[cursor : cursor + 2], "big")
-            cursor += 2
-            if cursor + sps_length > len(payload):
-                return b"", payload, nal_length_size
-            output.extend(b"\x00\x00\x00\x01")
-            output.extend(payload[cursor : cursor + sps_length])
-            cursor += sps_length
-
-        if cursor >= len(payload):
-            return b"", payload, nal_length_size
-        num_pps = payload[cursor]
-        cursor += 1
-
-        for _ in range(num_pps):
-            if cursor + 2 > len(payload):
-                return b"", payload, nal_length_size
-            pps_length = int.from_bytes(payload[cursor : cursor + 2], "big")
-            cursor += 2
-            if cursor + pps_length > len(payload):
-                return b"", payload, nal_length_size
-            output.extend(b"\x00\x00\x00\x01")
-            output.extend(payload[cursor : cursor + pps_length])
-            cursor += pps_length
-
-        return bytes(output), payload[cursor:], nal_length_size
-
-    def _consume_length_prefixed_avcc_config_record(self, payload: bytes) -> tuple[bytes, bytes, int]:
-        if len(payload) < 10:
-            return b"", payload, 4
-        record_length = int.from_bytes(payload[:4], "big")
-        if record_length <= 0 or len(payload) < 4 + record_length:
-            return b"", payload, 4
-        converted, _, nal_length_size = self._consume_avcc_config_record(payload[4 : 4 + record_length])
-        return converted, payload[4 + record_length :], nal_length_size
-
-    def _convert_avcc_buffer_to_annexb(
-        self,
-        payload: bytes,
-        *,
-        nal_length_size: int = 4,
-        finalize: bool = False,
-    ) -> tuple[bytes, bytes]:
-        output = bytearray()
-        cursor = 0
-        limit = len(payload)
-        while cursor + nal_length_size <= limit:
-            nal_size = int.from_bytes(payload[cursor : cursor + nal_length_size], "big")
-            if nal_size <= 0:
-                cursor += nal_length_size
-                continue
-            if cursor + nal_length_size + nal_size > limit:
-                if finalize:
-                    return bytes(output), b""
-                break
-            cursor += nal_length_size
-            output.extend(b"\x00\x00\x00\x01")
-            output.extend(payload[cursor : cursor + nal_size])
-            cursor += nal_size
-        return bytes(output), payload[cursor:]
-
-    async def _collect_stderr(self, session: ActiveMonitorSession) -> str | None:
-        stderr_parts: list[str] = []
-        adb_stderr = await asyncio.to_thread(self._read_stderr, session.adb_process)
-        ffmpeg_stderr = await asyncio.to_thread(self._read_stderr, session.ffmpeg_process)
-        if adb_stderr:
-            stderr_parts.append(adb_stderr)
-        if ffmpeg_stderr:
-            stderr_parts.append(ffmpeg_stderr)
-        if not stderr_parts:
-            return None
-        return " | ".join(part for part in stderr_parts if part).strip() or None
+        return payload[4:8] == b"ftyp"
 
     def _read_stderr(self, process: subprocess.Popen[bytes]) -> str:
         if process.stderr is None:
@@ -551,6 +459,63 @@ class DeviceMonitorService:
             return process.stderr.read().decode("utf-8", errors="ignore").strip()
         except Exception:  # noqa: BLE001
             return ""
+
+    def _stderr_snapshot(self, process: subprocess.Popen[bytes], tail_buffer: _TextTailBuffer) -> str:
+        buffered = tail_buffer.get_text()
+        if buffered or process.poll() is None:
+            return buffered
+        return self._read_stderr(process)
+
+    def _start_stderr_drain(
+        self,
+        stream: BinaryIO | None,
+        tail_buffer: _TextTailBuffer,
+        *,
+        name: str,
+    ) -> threading.Thread | None:
+        if stream is None:
+            return None
+        thread = threading.Thread(
+            target=self._drain_stream_to_tail,
+            args=(stream, tail_buffer),
+            name=name,
+            daemon=True,
+        )
+        thread.start()
+        return thread
+
+    def _drain_stream_to_tail(self, stream: BinaryIO, tail_buffer: _TextTailBuffer) -> None:
+        try:
+            while True:
+                chunk = stream.read(4096)
+                if not chunk:
+                    return
+                tail_buffer.append(chunk.decode("utf-8", errors="ignore"))
+        except Exception as exc:  # noqa: BLE001
+            tail_buffer.append(f"[stderr drain failed: {exc}]")
+
+
+
+    def _join_threads(self, threads: tuple[threading.Thread, ...], timeout: float) -> None:
+        for thread in threads:
+            if thread.is_alive():
+                thread.join(timeout=timeout)
+
+    def _has_unexpected_process_exit(self, session: ActiveMonitorSession) -> bool:
+        ffmpeg_code = session.ffmpeg_process.poll()
+        adb_code = session.adb_process.poll()
+        return ffmpeg_code not in (None, 0) or adb_code not in (None, 0)
+
+    def _summarize_reason(self, text: str) -> str:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        preferred = next((line for line in lines if not line.startswith("Traceback ")), "") or text.strip() or "视频流已中断"
+        return self._trim_text(preferred, ERROR_REASON_LIMIT)
+
+    def _trim_text(self, text: str, limit: int) -> str:
+        normalized = " ".join(text.split())
+        if len(normalized) <= limit:
+            return normalized
+        return normalized[: limit - 3].rstrip() + "..."
 
     def _terminate_process(self, process: subprocess.Popen[bytes]) -> None:
         try:

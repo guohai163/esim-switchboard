@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from unittest.mock import patch
 
@@ -87,13 +88,20 @@ Row: 1 address=10086, body=world, sub_id=5, _id=2, date=1716670000000
     ):  # noqa: ANN201
         import io
 
+        payload = (
+            b"\x00\x00\x00\x01\x67\x42\x80\x0a"
+            b"\x00\x00\x00\x01\x68\xce\x06\xf2"
+            b"\x00\x00\x00\x01\x65\xb8\x43\x71"
+        )
+
         class _PeekPipe(io.BufferedReader):
             def __init__(self, data: bytes) -> None:
-                super().__init__(io.BytesIO(data))
+                self._raw = io.BytesIO(data)
+                super().__init__(self._raw)
 
         class _Process:
             def __init__(self) -> None:
-                self.stdout = _PeekPipe(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2")
+                self.stdout = _PeekPipe(payload)
                 self.stderr = io.BytesIO(b"")
 
             @staticmethod
@@ -111,6 +119,10 @@ Row: 1 address=10086, body=world, sub_id=5, _id=2, date=1716670000000
             @staticmethod
             def kill() -> None:
                 return None
+
+            @staticmethod
+            def communicate(timeout: float | None = None):  # noqa: ARG004, ANN205
+                return payload, b""
 
         self.last_screenrecord_bitrate = bitrate
         self.last_screenrecord_time_limit = time_limit_seconds
@@ -1201,6 +1213,7 @@ def test_device_monitor_reports_unavailable_when_screenrecord_lacks_h264(tmp_pat
             "terminate": staticmethod(lambda: None),
             "wait": staticmethod(lambda timeout=0: 0),
             "kill": staticmethod(lambda: None),
+            "communicate": staticmethod(lambda timeout=None: (b"", b"unknown option --output-format")),
         },
     )()
 
@@ -1208,7 +1221,31 @@ def test_device_monitor_reports_unavailable_when_screenrecord_lacks_h264(tmp_pat
 
     assert response.status_code == 200
     assert response.json()["device_monitor"]["available"] is False
-    assert "不支持 H264 直出" in response.json()["device_monitor"]["reason"]
+    assert "unknown option --output-format" in response.json()["device_monitor"]["reason"]
+
+
+def test_device_monitor_reports_unavailable_when_screenrecord_outputs_mp4(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    client.app.state.services.adb_client.open_h264_screenrecord = lambda **kwargs: type(  # type: ignore[method-assign]
+        "_Proc",
+        (),
+        {
+            "stdout": __import__("io").BytesIO(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"),
+            "stderr": __import__("io").BytesIO(b""),
+            "poll": staticmethod(lambda: 0),
+            "terminate": staticmethod(lambda: None),
+            "wait": staticmethod(lambda timeout=0: 0),
+            "kill": staticmethod(lambda: None),
+            "communicate": staticmethod(lambda timeout=None: (b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2", b"")),
+        },
+    )()
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json()["device_monitor"]["available"] is False
+    assert "未输出 H264 数据" in response.json()["device_monitor"]["reason"]
 
 
 def test_device_monitor_probe_ignores_missing_help_text_when_h264_bytes_exist(tmp_path: Path) -> None:
@@ -1222,6 +1259,27 @@ def test_device_monitor_probe_ignores_missing_help_text_when_h264_bytes_exist(tm
     assert response.json()["device_monitor"]["available"] is True
 
 
+def test_device_monitor_health_probe_caches_recent_result(tmp_path: Path) -> None:
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    calls = {"count": 0}
+
+    original = client.app.state.services.adb_client.open_h264_screenrecord
+
+    def counted_open(**kwargs):  # noqa: ANN003
+        calls["count"] += 1
+        return original(**kwargs)
+
+    client.app.state.services.adb_client.open_h264_screenrecord = counted_open  # type: ignore[method-assign]
+
+    first = client.get("/api/health")
+    second = client.get("/api/health")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert calls["count"] == 1
+
+
 def test_device_monitor_startup_reports_bad_mp4_header_when_exec_out_fails(tmp_path: Path) -> None:
     from app.device_monitor import DeviceMonitorService, DeviceMonitorUnavailableError
 
@@ -1232,7 +1290,7 @@ def test_device_monitor_startup_reports_bad_mp4_header_when_exec_out_fails(tmp_p
     config.ffmpeg_path = "/tmp/fake-ffmpeg"
     service = DeviceMonitorService(config, FakeAdbClient())
     service._resolve_ffmpeg_error = lambda: None  # type: ignore[method-assign]
-    service._spawn_session_with_transport = lambda websocket, transport: (_ for _ in ()).throw(DeviceMonitorUnavailableError("bad header"))  # type: ignore[method-assign]
+    service._spawn_ffmpeg = lambda process: (_ for _ in ()).throw(DeviceMonitorUnavailableError("bad header"))  # type: ignore[method-assign]
 
     try:
         service._spawn_session(FakeWebSocket())  # type: ignore[arg-type]
@@ -1242,84 +1300,169 @@ def test_device_monitor_startup_reports_bad_mp4_header_when_exec_out_fails(tmp_p
         raise AssertionError("Expected bad MP4 header to bubble up as unavailable")
 
 
-def test_device_monitor_converts_avcc_to_annexb_before_ffmpeg(tmp_path: Path) -> None:
+def test_device_monitor_error_details_prefer_ffmpeg_stderr_over_fallback(tmp_path: Path) -> None:
+    from app.device_monitor import ActiveMonitorSession, DeviceMonitorService
+
+    class DummyWebSocket:
+        async def send_json(self, payload):  # noqa: ANN001, ANN201
+            return payload
+
+    class DummyProcess:
+        def __init__(self, *, returncode: int = 1) -> None:
+            import io
+
+            self.stdin = io.BytesIO(b"")
+            self.stdout = io.BytesIO(b"")
+            self.stderr = io.BytesIO(b"")
+            self._returncode = returncode
+
+        def poll(self) -> int | None:
+            return self._returncode
+
+    async def run_case() -> None:
+        config = AppConfig.from_env(tmp_path)
+        service = DeviceMonitorService(config, FakeAdbClient())
+        session = ActiveMonitorSession(
+            adb_process=DummyProcess(),
+            ffmpeg_process=DummyProcess(),
+            websocket=DummyWebSocket(),
+            loop=asyncio.get_running_loop(),
+            mime_codec='video/mp4; codecs="avc1.42E028"',
+        )
+        session.ffmpeg_stderr_tail.append("ffmpeg stderr detail")
+        session.adb_stderr_tail.append("adb stderr detail")
+
+        reason, diagnostic = service._build_error_details(session, fallback_reason="fallback")  # noqa: SLF001
+
+        assert reason == "ffmpeg stderr detail"
+        assert diagnostic is not None
+        assert "ffmpeg stderr detail" in diagnostic
+        assert "adb stderr detail" in diagnostic
+
+    asyncio.run(run_case())
+
+
+
+
+def test_device_monitor_default_bitrate_matches_manual_success_path(tmp_path: Path) -> None:
     from app.device_monitor import DeviceMonitorService
 
     config = AppConfig.from_env(tmp_path)
     service = DeviceMonitorService(config, FakeAdbClient())
 
-    avcc = (
-        b"\x00\x00\x00\x04\x67\x64\x00\x1f"
-        b"\x00\x00\x00\x04\x68\xeb\xe3\xcb"
-        b"\x00\x00\x00\x03\x65\x88\x84"
-    )
-
-    converted, remaining = service._convert_avcc_buffer_to_annexb(avcc, finalize=True)  # noqa: SLF001
-
-    assert remaining == b""
-    assert converted.startswith(b"\x00\x00\x00\x01\x67")
-    assert b"\x00\x00\x00\x01\x68" in converted
-    assert converted.endswith(b"\x00\x00\x00\x01\x65\x88\x84")
+    assert service._screenrecord_bitrate_arg() is None  # noqa: SLF001
 
 
-def test_device_monitor_consumes_avcc_config_record(tmp_path: Path) -> None:
+def test_device_monitor_allows_explicit_integer_bitrate(tmp_path: Path) -> None:
     from app.device_monitor import DeviceMonitorService
 
     config = AppConfig.from_env(tmp_path)
+    config.device_monitor_bitrate = "2500000"
     service = DeviceMonitorService(config, FakeAdbClient())
-    avcc_config = (
-        b"\x01\x64\x00\x1f\xff\xe1"
-        b"\x00\x04\x67\x64\x00\x1f"
-        b"\x01"
-        b"\x00\x04\x68\xeb\xe3\xcb"
-        b"\x00\x00\x00\x03\x65\x88\x84"
-    )
 
-    converted_prefix, remaining, nal_length_size = service._consume_avcc_config_record(avcc_config)  # noqa: SLF001
-
-    assert converted_prefix.startswith(b"\x00\x00\x00\x01\x67")
-    assert b"\x00\x00\x00\x01\x68" in converted_prefix
-    assert remaining == b"\x00\x00\x00\x03\x65\x88\x84"
-    assert nal_length_size == 4
+    assert service._screenrecord_bitrate_arg() == "2500000"  # noqa: SLF001
 
 
-def test_device_monitor_consumes_length_prefixed_avcc_config_record(tmp_path: Path) -> None:
+def test_device_monitor_ffmpeg_command_matches_manual_success_path(tmp_path: Path) -> None:
     from app.device_monitor import DeviceMonitorService
 
     config = AppConfig.from_env(tmp_path)
+    config.ffmpeg_path = "/tmp/fake-ffmpeg"
     service = DeviceMonitorService(config, FakeAdbClient())
-    avcc_config = (
-        b"\x00\x00\x00\x13"
-        b"\x01\x64\x00\x1f\xff\xe1"
-        b"\x00\x04\x67\x64\x00\x1f"
-        b"\x01"
-        b"\x00\x04\x68\xeb\xe3\xcb"
-        b"\x00\x00\x00\x03\x65\x88\x84"
-    )
 
-    converted_prefix, remaining, nal_length_size = service._consume_length_prefixed_avcc_config_record(avcc_config)  # noqa: SLF001
+    class DummyProcess:
+        def __init__(self) -> None:
+            import io
 
-    assert converted_prefix.startswith(b"\x00\x00\x00\x01\x67")
-    assert remaining == b"\x00\x00\x00\x03\x65\x88\x84"
-    assert nal_length_size == 4
+            self.stdout = io.BufferedReader(io.BytesIO(b"\x00\x00\x00\x01\x67\x42\x80\x0a"))
+            self.stderr = io.BytesIO(b"")
 
+        @staticmethod
+        def poll() -> int | None:
+            return None
 
-def test_device_monitor_converts_avcc_with_two_byte_nal_lengths(tmp_path: Path) -> None:
-    from app.device_monitor import DeviceMonitorService
+        @staticmethod
+        def terminate() -> None:
+            return None
 
-    config = AppConfig.from_env(tmp_path)
-    service = DeviceMonitorService(config, FakeAdbClient())
-    avcc = (
-        b"\x00\x04\x67\x64\x00\x1f"
-        b"\x00\x04\x68\xeb\xe3\xcb"
-        b"\x00\x03\x65\x88\x84"
-    )
+        @staticmethod
+        def wait(timeout: float = 0) -> int:  # noqa: ARG004
+            return 0
 
-    converted, remaining = service._convert_avcc_buffer_to_annexb(avcc, nal_length_size=2, finalize=True)  # noqa: SLF001
+        @staticmethod
+        def kill() -> None:
+            return None
 
-    assert remaining == b""
-    assert converted.startswith(b"\x00\x00\x00\x01\x67")
-    assert converted.endswith(b"\x00\x00\x00\x01\x65\x88\x84")
+    adb_process = DummyProcess()
+    captured: list[list[str]] = []
+
+    def fake_popen(command, stdin=None, stdout=None, stderr=None, bufsize=None):  # noqa: ANN001
+        captured.append(command)
+
+        class FakeFfmpeg:
+            def __init__(self) -> None:
+                import io
+
+                self.stdin = io.BytesIO(b"")
+                self.stdout = io.BytesIO(b"")
+                self.stderr = io.BytesIO(b"")
+
+            @staticmethod
+            def poll() -> int | None:
+                return None
+
+            @staticmethod
+            def terminate() -> None:
+                return None
+
+            @staticmethod
+            def wait(timeout: float = 0) -> int:  # noqa: ARG004
+                return 0
+
+            @staticmethod
+            def kill() -> None:
+                return None
+
+        return FakeFfmpeg()
+
+    with patch("app.device_monitor.subprocess.Popen", side_effect=fake_popen):
+        service._spawn_ffmpeg(adb_process)  # noqa: SLF001
+
+    assert captured == [[
+        "/tmp/fake-ffmpeg",
+        "-loglevel",
+        "error",
+        "-f",
+        "h264",
+        "-i",
+        "pipe:0",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+        "-vf",
+        "scale=720:-2",
+        "-b:v",
+        "2M",
+        "-maxrate",
+        "2M",
+        "-bufsize",
+        "4M",
+        "-profile:v",
+        "baseline",
+        "-level",
+        "4.0",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "empty_moov+omit_tfhd_offset+default_base_moof+frag_every_frame",
+        "-f",
+        "mp4",
+        "pipe:1",
+    ]]
 
 
 def test_device_monitor_control_action_maps_keyevents(tmp_path: Path) -> None:
@@ -1402,6 +1545,27 @@ def test_device_monitor_websocket_rejects_when_switch_running(tmp_path: Path) ->
             assert exc.code == 4423
 
 
+def test_device_monitor_websocket_surfaces_startup_diagnostic(tmp_path: Path) -> None:
+    from app.device_monitor import DeviceMonitorUnavailableError
+
+    client = make_test_app(tmp_path)
+    client.post("/api/auth/login", json={"password": "secret123"})
+    client.app.state.services.device_monitor_service.start_session = lambda websocket, switch_running: (_ for _ in ()).throw(  # type: ignore[method-assign]
+        DeviceMonitorUnavailableError("bad header", diagnostic="ffmpeg: missing SPS/PPS")
+    )
+
+    with client.websocket_connect("/api/device/monitor/ws") as websocket:
+        message = websocket.receive_json()
+        assert message["type"] == "error"
+        assert message["reason"] == "bad header"
+        assert message["diagnostic"] == "ffmpeg: missing SPS/PPS"
+        try:
+            websocket.receive_json()
+            raise AssertionError("Expected websocket to close after unavailable error")
+        except WebSocketDisconnect as exc:
+            assert exc.code == 4410
+
+
 def test_device_monitor_websocket_rejects_second_viewer(tmp_path: Path) -> None:
     client = make_test_app(tmp_path)
     client.post("/api/auth/login", json={"password": "secret123"})
@@ -1421,6 +1585,107 @@ def test_device_monitor_websocket_rejects_second_viewer(tmp_path: Path) -> None:
             raise AssertionError("Expected websocket to close after conflict error")
         except WebSocketDisconnect as exc:
             assert exc.code == 4409
+
+
+def test_device_monitor_stream_to_websocket_reports_runtime_diagnostic(tmp_path: Path) -> None:
+    from app.device_monitor import ActiveMonitorSession, DeviceMonitorService
+
+    class DummyWebSocket:
+        def __init__(self) -> None:
+            self.messages: list[dict[str, object]] = []
+            self.binary_messages: list[bytes] = []
+
+        async def send_json(self, payload):  # noqa: ANN001, ANN201
+            self.messages.append(payload)
+
+        async def send_bytes(self, payload: bytes) -> None:
+            self.binary_messages.append(payload)
+
+    class DummyProcess:
+        def __init__(self, *, stdout: bytes = b"", stderr: bytes = b"", returncode: int = 1) -> None:
+            import io
+
+            self.stdin = io.BytesIO(b"")
+            self.stdout = io.BytesIO(stdout)
+            self.stderr = io.BytesIO(stderr)
+            self._returncode = returncode
+
+        def poll(self) -> int | None:
+            return self._returncode
+
+    async def run_case() -> None:
+        config = AppConfig.from_env(tmp_path)
+        service = DeviceMonitorService(config, FakeAdbClient())
+        socket = DummyWebSocket()
+        session = ActiveMonitorSession(
+            adb_process=DummyProcess(returncode=0),
+            ffmpeg_process=DummyProcess(returncode=1),
+            websocket=socket,
+            loop=asyncio.get_running_loop(),
+            mime_codec='video/mp4; codecs="avc1.42E028"',
+        )
+        session.ffmpeg_stderr_tail.append("ffmpeg: invalid data found when processing input")
+
+        await service.stream_to_websocket(session)
+
+        assert socket.messages[0] == {"type": "status", "status": "starting"}
+        assert socket.messages[1] == {"type": "media", "mime_codec": 'video/mp4; codecs="avc1.42E028"'}
+        assert socket.messages[2] == {"type": "status", "status": "streaming"}
+        assert socket.binary_messages == []
+        error = socket.messages[-1]
+        assert error["type"] == "error"
+        assert "ffmpeg: invalid data found" in str(error["reason"])
+        assert "ffmpeg: invalid data found" in str(error["diagnostic"])
+
+    asyncio.run(run_case())
+
+
+def test_device_monitor_stream_to_websocket_ignores_clean_eof(tmp_path: Path) -> None:
+    from app.device_monitor import ActiveMonitorSession, DeviceMonitorService
+
+    class DummyWebSocket:
+        def __init__(self) -> None:
+            self.messages: list[dict[str, object]] = []
+
+        async def send_json(self, payload):  # noqa: ANN001, ANN201
+            self.messages.append(payload)
+
+        async def send_bytes(self, payload: bytes) -> None:  # noqa: ARG002
+            raise AssertionError("Did not expect binary payloads for clean EOF")
+
+    class DummyProcess:
+        def __init__(self) -> None:
+            import io
+
+            self.stdin = io.BytesIO(b"")
+            self.stdout = io.BytesIO(b"")
+            self.stderr = io.BytesIO(b"")
+
+        @staticmethod
+        def poll() -> int | None:
+            return 0
+
+    async def run_case() -> None:
+        config = AppConfig.from_env(tmp_path)
+        service = DeviceMonitorService(config, FakeAdbClient())
+        socket = DummyWebSocket()
+        session = ActiveMonitorSession(
+            adb_process=DummyProcess(),
+            ffmpeg_process=DummyProcess(),
+            websocket=socket,
+            loop=asyncio.get_running_loop(),
+            mime_codec='video/mp4; codecs="avc1.42E028"',
+        )
+
+        await service.stream_to_websocket(session)
+
+        assert socket.messages == [
+            {"type": "status", "status": "starting"},
+            {"type": "media", "mime_codec": 'video/mp4; codecs="avc1.42E028"'},
+            {"type": "status", "status": "streaming"},
+        ]
+
+    asyncio.run(run_case())
 
 
 def test_sms_stream_requires_auth_and_allows_authenticated_stream(tmp_path: Path) -> None:

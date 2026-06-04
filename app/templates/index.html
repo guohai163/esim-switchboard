@@ -230,6 +230,9 @@
             font-size: 0.94rem;
         }
 
+        // 初始化检查环境
+        checkMonitorEnvironment();
+
         thead th {
             color: var(--muted);
             border-top: 0;
@@ -2113,6 +2116,7 @@
             socket: null,
             mediaSource: null,
             sourceBuffer: null,
+            mimeCodec: null,
             queue: [],
             objectUrl: null,
             reconnectTimer: null,
@@ -2351,15 +2355,22 @@
 
         function setupDeviceMonitorMedia() {
             resetDeviceMonitorMedia();
+            if (!monitorState.mimeCodec) {
+                return;
+            }
             const mediaSource = new MediaSource();
             monitorState.mediaSource = mediaSource;
             monitorState.objectUrl = URL.createObjectURL(mediaSource);
             deviceMonitorVideo.src = monitorState.objectUrl;
+            deviceMonitorVideo.onerror = () => {
+                const err = deviceMonitorVideo.error;
+                setDeviceMonitorState("视频解码错误", `错误代码: ${err ? err.code : '未知'}，可能是格式或分辨率不支持`, true);
+            };
             mediaSource.addEventListener("sourceopen", () => {
                 if (monitorState.sourceBuffer || monitorState.mediaSource !== mediaSource) {
                     return;
                 }
-                const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.64001F"');
+                const sourceBuffer = mediaSource.addSourceBuffer(monitorState.mimeCodec);
                 sourceBuffer.mode = "segments";
                 sourceBuffer.addEventListener("updateend", flushDeviceMonitorQueue);
                 monitorState.sourceBuffer = sourceBuffer;
@@ -2375,6 +2386,11 @@
             const next = monitorState.queue.shift();
             try {
                 sourceBuffer.appendBuffer(next);
+                if (deviceMonitorVideo.paused) {
+                    deviceMonitorVideo.play().catch((e) => {
+                        setDeviceMonitorState("播放失败", `浏览器阻止播放: ${e.message}`, true);
+                    });
+                }
             } catch (error) {
                 setDeviceMonitorState("连接异常", `视频缓冲失败：${error.message || error}`, true);
                 stopDeviceMonitorStream();
@@ -2439,7 +2455,8 @@
                 return;
             }
             monitorState.isOpening = true;
-            setupDeviceMonitorMedia();
+            monitorState.mimeCodec = null;
+            resetDeviceMonitorMedia();
             renderDeviceMonitorButtons();
             setDeviceMonitorStage("正在建立视频通道", "浏览器正在连接后端 WebSocket，并准备接收 H264 画面。", true);
             setDeviceMonitorState("连接中", "正在打开手机监控...", false);
@@ -2459,6 +2476,11 @@
                         if (message.status === "streaming") {
                             setDeviceMonitorStage("实时画面已连接", "点击手机画面即可发送 tap，右侧按钮可执行基础遥控。", false);
                         }
+                        return;
+                    }
+                    if (message.type === "media") {
+                        monitorState.mimeCodec = message.mime_codec || null;
+                        setupDeviceMonitorMedia();
                         return;
                     }
                     if (message.type === "error") {
@@ -3246,13 +3268,14 @@
 
         async function loadDashboard() {
             if (viewState.isMobileView) {
-                const [esimResult, switchResult, monitorResult, smsResult] = await Promise.all([
+                const [healthResult, esimResult, switchResult, monitorResult, smsResult] = await Promise.all([
+                    loadHealthSection(),
                     loadEsimSection(),
                     loadSwitchSection(),
                     loadMonitorSection(),
                     loadSmsSection(1),
                 ]);
-                const failures = [esimResult, switchResult, monitorResult, smsResult]
+                const failures = [healthResult, esimResult, switchResult, monitorResult, smsResult]
                     .filter((result) => !result.ok)
                     .map((result) => result.error);
                 if (failures.length) {

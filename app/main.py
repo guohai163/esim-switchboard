@@ -577,7 +577,10 @@ def create_app(
             await websocket.close(code=4409, reason=str(exc))
             return
         except DeviceMonitorUnavailableError as exc:
-            await websocket.send_json({"type": "error", "reason": str(exc)})
+            payload = {"type": "error", "reason": str(exc)}
+            if exc.diagnostic:
+                payload["diagnostic"] = exc.diagnostic
+            await websocket.send_json(payload)
             await websocket.close(code=4410, reason=str(exc))
             return
 
