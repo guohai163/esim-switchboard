@@ -15,6 +15,7 @@ class AppConfig:
     adb_path: str
     adb_device_serial: str | None
     adb_healthcheck_timeout_seconds: float
+    ffmpeg_path: str
     sms_sync_delay_seconds: float
     adb_reconnect_delay_seconds: float
     default_page_size: int
@@ -41,6 +42,10 @@ class AppConfig:
     collab_presence_timeout_seconds: float
     collab_ping_interval_seconds: float
     collab_cursor_throttle_ms: int
+    device_monitor_bitrate: str
+    device_monitor_max_fps: int
+    device_monitor_buffer_kb: int
+    device_monitor_ws_ping_seconds: float
 
     @classmethod
     def from_env(cls, base_dir: Path | None = None) -> "AppConfig":
@@ -56,6 +61,7 @@ class AppConfig:
             adb_path=os.getenv("ADB_PATH", "adb"),
             adb_device_serial=os.getenv("ADB_DEVICE_SERIAL") or None,
             adb_healthcheck_timeout_seconds=float(os.getenv("ADB_HEALTHCHECK_TIMEOUT_SECONDS", "3")),
+            ffmpeg_path=os.getenv("FFMPEG_PATH", "ffmpeg"),
             sms_sync_delay_seconds=float(os.getenv("SMS_SYNC_DELAY_SECONDS", "1.5")),
             adb_reconnect_delay_seconds=float(os.getenv("ADB_RECONNECT_DELAY_SECONDS", "5")),
             default_page_size=int(os.getenv("DEFAULT_PAGE_SIZE", "50")),
@@ -112,6 +118,10 @@ class AppConfig:
             collab_presence_timeout_seconds=float(os.getenv("COLLAB_PRESENCE_TIMEOUT_SECONDS", "15")),
             collab_ping_interval_seconds=float(os.getenv("COLLAB_PING_INTERVAL_SECONDS", "5")),
             collab_cursor_throttle_ms=int(os.getenv("COLLAB_CURSOR_THROTTLE_MS", "50")),
+            device_monitor_bitrate=os.getenv("DEVICE_MONITOR_BITRATE", "2500k"),
+            device_monitor_max_fps=int(os.getenv("DEVICE_MONITOR_MAX_FPS", "15")),
+            device_monitor_buffer_kb=int(os.getenv("DEVICE_MONITOR_BUFFER_KB", "128")),
+            device_monitor_ws_ping_seconds=float(os.getenv("DEVICE_MONITOR_WS_PING_SECONDS", "10")),
         )
 
 

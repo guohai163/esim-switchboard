@@ -16,11 +16,21 @@ from app.adb import AdbClient, AdbCommandError
 from app.collab import CollabSessionService
 from app.config import AppConfig
 from app.db import Database
+from app.device_monitor import (
+    DeviceMonitorConflictError,
+    DeviceMonitorLockedError,
+    DeviceMonitorService,
+    DeviceMonitorUnavailableError,
+)
 from app.keepalive_service import KeepaliveService
 from app.models import (
     AuthLoginRequest,
     AuthStatusResponse,
+    DeviceMonitorActionRequest,
+    DeviceMonitorTapRequest,
     EsimLatestResponse,
+    EsimRemarkOut,
+    EsimRemarkUpdateRequest,
     EsimSwitchRequest,
     EsimSwitchStatusResponse,
     HealthResponse,
@@ -56,6 +66,12 @@ def build_services(config: AppConfig) -> AppServices:
     sms_event_service = SmsEventService()
     monitor = SmsMonitor(config, db, sms_service, adb_client, sms_event_service=sms_event_service)
     switch_service = EsimSwitchService(config, db, esim_service)
+    device_monitor_service = DeviceMonitorService(config, adb_client)
+    switch_service.register_pre_switch_hook(
+        lambda display_name, keepalive: device_monitor_service.force_stop(
+            "eSIM 切换已开始，手机监控已自动关闭" if not keepalive else "保号任务需要独占手机，监控已自动关闭"
+        )
+    )
     collab_service = CollabSessionService(config)
     keepalive_service = KeepaliveService(config, db, esim_service, switch_service, adb_client)
     return AppServices(
@@ -66,6 +82,7 @@ def build_services(config: AppConfig) -> AppServices:
         sms_service=sms_service,
         monitor=monitor,
         switch_service=switch_service,
+        device_monitor_service=device_monitor_service,
         sms_event_service=sms_event_service,
         collab_service=collab_service,
         keepalive_service=keepalive_service,
@@ -206,6 +223,12 @@ def create_app(
         adb_devices: list[str] = []
         adb_error: str | None = None
         try:
+            switch_status = await run_blocking(runtime.switch_service.get_status)
+            monitor_status = await run_blocking(runtime.monitor.get_status)
+            device_monitor_status = await run_blocking(
+                runtime.device_monitor_service.get_status,
+                switch_running=switch_status.get("status") == "running",
+            )
             adb_devices = await run_blocking(
                 runtime.adb_client.get_devices,
                 timeout=runtime.config.adb_healthcheck_timeout_seconds,
@@ -216,13 +239,14 @@ def create_app(
         except Exception as exc:  # noqa: BLE001
             adb_error = str(exc)
         return {
-            "ok": adb_available,
+            "ok": adb_available and device_monitor_status["available"],
             "db_path": str(runtime.config.db_path),
             "adb_path": runtime.config.adb_path,
             "adb_available": adb_available,
             "adb_devices": adb_devices,
             "adb_error": adb_error,
-            "monitor": await run_blocking(runtime.monitor.get_status),
+            "monitor": monitor_status,
+            "device_monitor": device_monitor_status,
             "last_sms_sync": await run_blocking(runtime.db.get_app_state_json, "last_sms_sync"),
             "last_esim_sync": await run_blocking(runtime.db.get_app_state_json, "last_esim_sync"),
         }
@@ -232,6 +256,23 @@ def create_app(
         require_auth(request)
         runtime = get_services(request)
         return await run_blocking(runtime.esim_service.latest)
+
+    @app.put("/api/esim/remarks/{sub_id}", response_model=EsimRemarkOut)
+    async def update_esim_remark(request: Request, sub_id: str, payload: EsimRemarkUpdateRequest) -> dict:
+        require_auth(request)
+        runtime = get_services(request)
+        latest = await run_blocking(runtime.esim_service.latest)
+        target = next((item for item in latest.get("subscriptions", []) if item.get("sub_id") == sub_id), None)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Target SIM not found")
+
+        normalized = (payload.remark or "").strip()
+        if not normalized:
+            await run_blocking(runtime.db.delete_esim_remark, sub_id)
+            return {"sub_id": sub_id, "remark": None}
+
+        saved = await run_blocking(runtime.db.upsert_esim_remark, sub_id, normalized, utc_now_iso())
+        return {"sub_id": sub_id, "remark": saved.get("remark")}
 
     @app.post("/api/esim/switch", response_model=EsimSwitchStatusResponse)
     async def switch_esim(request: Request, payload: EsimSwitchRequest) -> dict:
@@ -435,6 +476,39 @@ def create_app(
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    @app.post("/api/device/monitor/control/action")
+    async def device_monitor_action(request: Request, payload: DeviceMonitorActionRequest) -> dict:
+        require_auth(request)
+        runtime = get_services(request)
+        switch_status = await run_blocking(runtime.switch_service.get_status)
+        try:
+            return await run_blocking(
+                runtime.device_monitor_service.send_action,
+                payload.action,
+                switch_running=switch_status.get("status") == "running",
+            )
+        except DeviceMonitorLockedError as exc:
+            raise HTTPException(status_code=423, detail=str(exc)) from exc
+        except DeviceMonitorUnavailableError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post("/api/device/monitor/control/tap")
+    async def device_monitor_tap(request: Request, payload: DeviceMonitorTapRequest) -> dict:
+        require_auth(request)
+        runtime = get_services(request)
+        switch_status = await run_blocking(runtime.switch_service.get_status)
+        try:
+            return await run_blocking(
+                runtime.device_monitor_service.send_tap,
+                payload.x_ratio,
+                payload.y_ratio,
+                switch_running=switch_status.get("status") == "running",
+            )
+        except DeviceMonitorLockedError as exc:
+            raise HTTPException(status_code=423, detail=str(exc)) from exc
+        except DeviceMonitorUnavailableError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     @app.websocket("/api/collab/ws")
     async def collab_ws(websocket: WebSocket) -> None:
         if not is_authenticated(websocket):
@@ -479,6 +553,43 @@ def create_app(
         finally:
             if participant_id:
                 await runtime.collab_service.disconnect(participant_id)
+
+    @app.websocket("/api/device/monitor/ws")
+    async def device_monitor_ws(websocket: WebSocket) -> None:
+        if not is_authenticated(websocket):
+            await websocket.close(code=4401, reason="Authentication required")
+            return
+
+        await websocket.accept()
+        runtime = websocket.app.state.services
+        switch_status = runtime.switch_service.get_status()
+        try:
+            session = runtime.device_monitor_service.start_session(
+                websocket,
+                switch_running=switch_status.get("status") == "running",
+            )
+        except DeviceMonitorLockedError as exc:
+            await websocket.send_json({"type": "error", "reason": str(exc)})
+            await websocket.close(code=4423, reason=str(exc))
+            return
+        except DeviceMonitorConflictError as exc:
+            await websocket.send_json({"type": "error", "reason": str(exc)})
+            await websocket.close(code=4409, reason=str(exc))
+            return
+        except DeviceMonitorUnavailableError as exc:
+            payload = {"type": "error", "reason": str(exc)}
+            if exc.diagnostic:
+                payload["diagnostic"] = exc.diagnostic
+            await websocket.send_json(payload)
+            await websocket.close(code=4410, reason=str(exc))
+            return
+
+        try:
+            await runtime.device_monitor_service.stream_to_websocket(session)
+        except WebSocketDisconnect:
+            pass
+        finally:
+            runtime.device_monitor_service.finish_session(session)
 
     return app
 

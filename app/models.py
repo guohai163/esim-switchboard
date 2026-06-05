@@ -45,6 +45,7 @@ class EsimSubscriptionOut(BaseModel):
     sub_id: str
     display_name: str | None = None
     carrier_name: str | None = None
+    remark: str | None = None
     is_embedded: bool
     is_active: bool
     sim_slot_index: int | None = None
@@ -109,6 +110,15 @@ class AuthStatusResponse(BaseModel):
 class EsimSwitchRequest(BaseModel):
     display_name: str
     lock_minutes: Literal[10, 20, 30]
+
+
+class EsimRemarkUpdateRequest(BaseModel):
+    remark: str | None = Field(default=None, max_length=100)
+
+
+class EsimRemarkOut(BaseModel):
+    sub_id: str
+    remark: str | None = None
 
 
 class KeepaliveRuleOut(BaseModel):
@@ -201,6 +211,22 @@ class MonitorStatusResponse(BaseModel):
     last_broadcast_source: str | None = None
 
 
+class DeviceMonitorStatusResponse(BaseModel):
+    available: bool
+    running: bool
+    reason: str | None = None
+    browser_supported_hint: str
+
+
+class DeviceMonitorActionRequest(BaseModel):
+    action: Literal["back", "home", "recent", "volume_up", "volume_down", "power"]
+
+
+class DeviceMonitorTapRequest(BaseModel):
+    x_ratio: float = Field(ge=0, le=1)
+    y_ratio: float = Field(ge=0, le=1)
+
+
 class HealthResponse(BaseModel):
     ok: bool
     db_path: str
@@ -209,6 +235,7 @@ class HealthResponse(BaseModel):
     adb_devices: list[str] = Field(default_factory=list)
     adb_error: str | None = None
     monitor: MonitorStatusResponse
+    device_monitor: DeviceMonitorStatusResponse
     last_sms_sync: dict[str, Any] | None = None
     last_esim_sync: dict[str, Any] | None = None
 

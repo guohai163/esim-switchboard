@@ -100,6 +100,12 @@ class EsimSwitchService:
         self._logs: list[SwitchLogEntry] = []
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._active_thread: threading.Thread | None = None
+        self._pre_switch_hooks: list[Any] = []
+
+    def register_pre_switch_hook(self, hook: Any) -> None:
+        """Register side effects that must happen before the phone UI is taken over."""
+
+        self._pre_switch_hooks.append(hook)
 
     def restore_state(self) -> None:
         with self._lock:
@@ -165,6 +171,7 @@ class EsimSwitchService:
                 steps=[],
             )
             self._notify_locked("task_started", self._serialize_task(self._task))
+        self._run_pre_switch_hooks(display_name, keepalive=False)
 
         thread = threading.Thread(
             target=self._run_switch_flow,
@@ -192,6 +199,7 @@ class EsimSwitchService:
                 steps=[],
             )
             self._notify_locked("task_started", self._serialize_task(self._task))
+        self._run_pre_switch_hooks(display_name, keepalive=True)
         self._run_keepalive_flow(task_id, display_name)
 
     def _run_keepalive_flow(self, task_id: str, display_name: str) -> None:
@@ -415,6 +423,12 @@ class EsimSwitchService:
             else:
                 event_name = "task_failed"
             self._notify_locked(event_name, self._serialize_task(self._task))
+
+    def _run_pre_switch_hooks(self, display_name: str, *, keepalive: bool) -> None:
+        """Release external resources such as live monitor sessions before driving the device."""
+
+        for hook in self._pre_switch_hooks:
+            hook(display_name, keepalive)
 
     def _record_step(
         self,

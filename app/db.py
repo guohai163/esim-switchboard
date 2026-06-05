@@ -69,6 +69,13 @@ class Database:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS esim_remarks (
+                    sub_id TEXT PRIMARY KEY,
+                    remark TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS keepalive_rules (
                     esim_sub_id TEXT PRIMARY KEY,
                     esim_display_name TEXT,
@@ -161,6 +168,11 @@ class Database:
             if snapshot_row is None:
                 return None
 
+            remarks = {
+                row["sub_id"]: row["remark"]
+                for row in conn.execute("SELECT sub_id, remark FROM esim_remarks").fetchall()
+            }
+
             subscription_rows = conn.execute(
                 """
                 SELECT sub_id, display_name, carrier_name, is_embedded, is_active, sim_slot_index
@@ -180,6 +192,7 @@ class Database:
                         "sub_id": row["sub_id"],
                         "display_name": row["display_name"],
                         "carrier_name": row["carrier_name"],
+                        "remark": remarks.get(row["sub_id"]),
                         "is_embedded": bool(row["is_embedded"]),
                         "is_active": bool(row["is_active"]),
                         "sim_slot_index": row["sim_slot_index"],
@@ -187,6 +200,59 @@ class Database:
                     for row in subscription_rows
                 ],
             }
+
+    def list_esim_remarks(self) -> dict[str, str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT sub_id, remark
+                FROM esim_remarks
+                ORDER BY sub_id ASC
+                """
+            ).fetchall()
+        return {str(row["sub_id"]): str(row["remark"]) for row in rows}
+
+    def upsert_esim_remark(self, sub_id: str, remark: str, updated_at: str) -> dict[str, Any]:
+        current = self.get_esim_remark(sub_id)
+        created_at = current["created_at"] if current else updated_at
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO esim_remarks (sub_id, remark, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(sub_id) DO UPDATE SET
+                    remark = excluded.remark,
+                    updated_at = excluded.updated_at
+                """,
+                (sub_id, remark, created_at, updated_at),
+            )
+            conn.commit()
+        return self.get_esim_remark(sub_id) or {"sub_id": sub_id, "remark": remark, "created_at": created_at, "updated_at": updated_at}
+
+    def get_esim_remark(self, sub_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT sub_id, remark, created_at, updated_at
+                FROM esim_remarks
+                WHERE sub_id = ?
+                """,
+                (sub_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "sub_id": row["sub_id"],
+            "remark": row["remark"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def delete_esim_remark(self, sub_id: str) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM esim_remarks WHERE sub_id = ?", (sub_id,))
+            conn.commit()
+        return cursor.rowcount > 0
 
     def upsert_sms_messages(
         self,
