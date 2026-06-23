@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.1 - 2026-06-23
+
+### Docs
+- Added a dashboard showcase section to the README with a promotional screenshot of the web console.
+- Listed the new README showcase asset in the documented project structure.
+
 ## v0.1.0 - 2026-06-02
 
 ### Added
