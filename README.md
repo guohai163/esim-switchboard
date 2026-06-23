@@ -3,6 +3,12 @@
 `eSIM Switchboard` 是一个运行在 macOS 上的本地运维面板，用来管理一台通过 USB 连接的 Android 手机。  
 它把 `ADB`、`短信收件箱同步`、`eSIM 状态采集`、`eSIM 激活切换` 和 `网页可视化控制台` 组合在一起，适合做多 eSIM 管理、短信查看和远程辅助切换。
 
+## 界面展示
+
+下面这张图可以直观看到项目的 Web 控制台布局和核心能力：
+
+![eSIM Switchboard Web 控制台展示](assets/README-dashboard-showcase.png)
+
 从当前页面效果上看，它提供了这些核心区域：
 
 - 服务状态：ADB 可用性、监听线程状态、设备连接数
@@ -45,6 +51,7 @@ app/
   templates/index.html   Web 控制台
 assets/
   esim-switchboard-icon.svg
+  README-dashboard-showcase.png
 runtime/
   switch_screenshots/    eSIM 切换步骤截图
 scripts/
