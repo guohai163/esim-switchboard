@@ -218,8 +218,12 @@ scripts/manage_launch_agent.sh install
 
 - 总 eSIM 数
 - 当前激活 eSIM 数
+- 当前激活实体卡数
 - 最新同步时间
 - 每张 eSIM 的 `sub_id`、名称、运营商、状态
+
+移动端和切换确认弹层会分开展示“当前激活 eSIM”和“当前激活实体卡”。
+如果手机里是“实体卡 + eSIM”同时激活，页面会同时显示这两类当前激活卡。
 
 ### 切换 eSIM
 

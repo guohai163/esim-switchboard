@@ -1612,6 +1612,10 @@
                             <strong id="esim-active">0</strong>
                         </div>
                         <div class="stat">
+                            <label>当前激活实体卡数</label>
+                            <strong id="physical-active">0</strong>
+                        </div>
+                        <div class="stat">
                             <label>最近同步</label>
                             <strong id="esim-sync-at" class="compact">-</strong>
                         </div>
@@ -1711,6 +1715,12 @@
                     </div>
                     <div class="meta" id="mobile-current-esim-meta">运营商 / Sub ID 读取中</div>
                     <div class="meta" id="mobile-current-esim-remark">备注读取中</div>
+                    <div>
+                        <div class="meta">当前激活实体卡</div>
+                        <strong id="mobile-current-physical-name">-</strong>
+                    </div>
+                    <div class="meta" id="mobile-current-physical-meta">运营商 / Sub ID 读取中</div>
+                    <div class="meta" id="mobile-current-physical-remark">备注读取中</div>
                 </div>
                 <div class="mobile-kv">
                     <div class="mobile-kv-item">
@@ -1771,8 +1781,12 @@
             <p id="switch-confirm-subtitle">请确认目标卡和切换后的锁定时间。</p>
             <div class="switch-target-grid">
                 <div class="switch-target-box">
-                    <label>当前激活卡</label>
+                    <label>当前激活 eSIM</label>
                     <strong id="switch-current-esim">-</strong>
+                </div>
+                <div class="switch-target-box">
+                    <label>当前激活实体卡</label>
+                    <strong id="switch-current-physical">-</strong>
                 </div>
                 <div class="switch-target-box">
                     <label>待切换目标</label>
@@ -1993,6 +2007,7 @@
         const deviceMonitorActionButtons = Array.from(document.querySelectorAll("[data-monitor-action]"));
         const switchConfirmSubmit = document.getElementById("switch-confirm-submit");
         const switchCurrentEsim = document.getElementById("switch-current-esim");
+        const switchCurrentPhysical = document.getElementById("switch-current-physical");
         const switchPendingTarget = document.getElementById("switch-pending-target");
         const authOverlay = document.getElementById("auth-overlay");
         const authPasswordInput = document.getElementById("auth-password");
@@ -2045,6 +2060,9 @@
         const mobileCurrentEsimName = document.getElementById("mobile-current-esim-name");
         const mobileCurrentEsimMeta = document.getElementById("mobile-current-esim-meta");
         const mobileCurrentEsimRemark = document.getElementById("mobile-current-esim-remark");
+        const mobileCurrentPhysicalName = document.getElementById("mobile-current-physical-name");
+        const mobileCurrentPhysicalMeta = document.getElementById("mobile-current-physical-meta");
+        const mobileCurrentPhysicalRemark = document.getElementById("mobile-current-physical-remark");
         const mobileEsimSyncAt = document.getElementById("mobile-esim-sync-at");
         const mobileLockRemaining = document.getElementById("mobile-lock-remaining");
         const mobileLockNote = document.getElementById("mobile-lock-note");
@@ -2651,10 +2669,52 @@
             }
         }
 
+        function getActiveSubscriptionState(data) {
+            const subscriptions = data?.subscriptions || [];
+            const activeSubscriptions = subscriptions.filter((item) => item.is_active);
+            const activeEmbedded = activeSubscriptions.filter((item) => item.is_embedded);
+            const activePhysical = activeSubscriptions.filter((item) => !item.is_embedded);
+            return {
+                activeEmbedded,
+                activePhysical,
+                activeEmbeddedCount: activeEmbedded.length,
+                activePhysicalCount: activePhysical.length,
+            };
+        }
+
+        function formatActiveSubscriptionName(item) {
+            const fallbackName = item.is_embedded ? "未命名 eSIM" : "未命名实体卡";
+            return `${item.display_name || fallbackName} (Sub ID ${item.sub_id})`;
+        }
+
+        function renderActiveSubscriptionSection(items, emptyText, nameElement, metaElement, remarkElement) {
+            if (!items.length) {
+                nameElement.textContent = emptyText;
+                metaElement.textContent = "运营商 / Sub ID -";
+                remarkElement.textContent = "暂无备注";
+                return;
+            }
+            if (items.length === 1) {
+                const [item] = items;
+                nameElement.textContent = item.display_name || emptyText;
+                metaElement.textContent = `${item.carrier_name || "运营商未知"} · Sub ID ${item.sub_id}`;
+                remarkElement.textContent = item.remark ? `备注：${item.remark}` : "暂无备注";
+                return;
+            }
+            nameElement.textContent = `共 ${items.length} 张`;
+            metaElement.textContent = items.map((item) => `${item.carrier_name || "运营商未知"} · Sub ID ${item.sub_id}`).join("；");
+            const remarks = items
+                .map((item) => item.remark ? `${item.display_name || item.sub_id}：${item.remark}` : null)
+                .filter(Boolean);
+            remarkElement.textContent = remarks.length ? `备注：${remarks.join("；")}` : "暂无备注";
+        }
+
         function renderEsim(data) {
+            const activeState = getActiveSubscriptionState(data);
             switchState.latestEsim = data;
             document.getElementById("esim-total").textContent = String(data.embedded_total_count);
             document.getElementById("esim-active").textContent = String(data.embedded_active_count);
+            document.getElementById("physical-active").textContent = String(activeState.activePhysicalCount);
             document.getElementById("esim-sync-at").textContent = formatLocalDateTime(data.collected_at);
             mobileEsimSyncAt.textContent = formatLocalDateTime(data.collected_at);
             const names = [...new Set(data.subscriptions.map((item) => item.display_name).filter(Boolean))];
@@ -2679,19 +2739,24 @@
         }
 
         function renderMobileCurrentEsim(data) {
-            const activeItem = data?.subscriptions?.find((item) => item.is_active) || null;
+            const activeState = getActiveSubscriptionState(data);
             mobileEsimSummary.textContent = data?.subscriptions?.length
                 ? `共 ${data.embedded_total_count} 张 eSIM，可切换 ${Math.max(0, data.embedded_total_count - data.embedded_active_count)} 张`
                 : "暂无 eSIM 记录";
-            if (!activeItem) {
-                mobileCurrentEsimName.textContent = "暂无激活 eSIM";
-                mobileCurrentEsimMeta.textContent = "运营商 / Sub ID -";
-                mobileCurrentEsimRemark.textContent = "暂无备注";
-                return;
-            }
-            mobileCurrentEsimName.textContent = activeItem.display_name || "未命名 eSIM";
-            mobileCurrentEsimMeta.textContent = `${activeItem.carrier_name || "运营商未知"} · Sub ID ${activeItem.sub_id}`;
-            mobileCurrentEsimRemark.textContent = activeItem.remark ? `备注：${activeItem.remark}` : "暂无备注";
+            renderActiveSubscriptionSection(
+                activeState.activeEmbedded,
+                "暂无激活 eSIM",
+                mobileCurrentEsimName,
+                mobileCurrentEsimMeta,
+                mobileCurrentEsimRemark,
+            );
+            renderActiveSubscriptionSection(
+                activeState.activePhysical,
+                "暂无激活实体卡",
+                mobileCurrentPhysicalName,
+                mobileCurrentPhysicalMeta,
+                mobileCurrentPhysicalRemark,
+            );
         }
 
         function renderEsimTable() {
@@ -2825,6 +2890,7 @@
             switchState.latestEsim = null;
             document.getElementById("esim-total").textContent = "-";
             document.getElementById("esim-active").textContent = "-";
+            document.getElementById("physical-active").textContent = "-";
             document.getElementById("esim-sync-at").textContent = "-";
             displayNameFilter.innerHTML = '<option value="">全部名称</option>';
             keepaliveEsimSelect.innerHTML = "";
@@ -2836,6 +2902,9 @@
             mobileCurrentEsimName.textContent = "读取失败";
             mobileCurrentEsimMeta.textContent = message;
             mobileCurrentEsimRemark.textContent = "-";
+            mobileCurrentPhysicalName.textContent = "读取失败";
+            mobileCurrentPhysicalMeta.textContent = message;
+            mobileCurrentPhysicalRemark.textContent = "-";
             mobileEsimStatusPill.className = "pill bad";
             mobileEsimStatusPill.textContent = "读取失败";
             mobileEsimList.innerHTML = `<div class="meta">${message}</div>`;
@@ -3693,16 +3762,20 @@
             renderSwitchConfirmOverlay();
         }
 
-        function getActiveEsimName() {
-            const activeItem = switchState.latestEsim?.subscriptions?.find((item) => item.is_active);
-            return activeItem?.display_name || "-";
+        function formatActiveSubscriptionList(items) {
+            if (!items.length) {
+                return "-";
+            }
+            return items.map((item) => formatActiveSubscriptionName(item)).join("、");
         }
 
         function renderSwitchConfirmOverlay() {
             const lockActive = Boolean(switchState.task?.lock_active);
             const isRunning = switchState.task?.status === "running";
             const pendingName = switchState.pendingDisplayName;
-            switchCurrentEsim.textContent = getActiveEsimName();
+            const activeState = getActiveSubscriptionState(switchState.latestEsim);
+            switchCurrentEsim.textContent = formatActiveSubscriptionList(activeState.activeEmbedded);
+            switchCurrentPhysical.textContent = formatActiveSubscriptionList(activeState.activePhysical);
             switchPendingTarget.textContent = pendingName || "-";
             switchConfirmSubtitle.textContent = pendingName
                 ? `即将切换到 ${pendingName}，请确认锁定时间。`
