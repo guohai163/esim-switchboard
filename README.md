@@ -165,7 +165,7 @@ scripts/manage_launch_agent.sh install
 
 - 生成 `~/Library/LaunchAgents/com.guohai.esim-switchboard.plist`
 - 用当前用户的 `launchd` 域加载服务
-- 自动执行 `uvicorn app.main:app --host 127.0.0.1 --port 8000`
+- 自动执行 `uvicorn app.main:app --host 192.168.88.3 --port 8000`
 - 设置为用户登录后自动拉起
 
 如果系统 `PATH` 中已有 `adb`，或者 `~/Library/Android/sdk/platform-tools/adb` 存在，脚本也会自动尝试探测 `ADB_PATH`。

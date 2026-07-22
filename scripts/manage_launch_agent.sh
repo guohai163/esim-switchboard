@@ -6,7 +6,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(cd -- "${SCRIPT_DIR}/.." && pwd)
 
 LABEL=${LABEL:-com.guohai.esim-switchboard}
-HOST=${HOST:-127.0.0.1}
+HOST=${HOST:-192.168.88.3}
 PORT=${PORT:-8000}
 WORK_DIR=${WORK_DIR:-"${ROOT_DIR}"}
 PYTHON_BIN=${PYTHON_BIN:-"${ROOT_DIR}/.venv/bin/python"}
@@ -104,12 +104,20 @@ resolve_defaults() {
             ADB_PATH="${HOME}/Library/Android/sdk/platform-tools/adb"
         fi
     fi
+    if [[ -z "${FFMPEG_PATH}" ]] && command -v ffmpeg >/dev/null 2>&1; then
+        FFMPEG_PATH=$(command -v ffmpeg)
+    fi
 }
 
 require_prereqs() {
     if [[ ! -x "${PYTHON_BIN}" ]]; then
         echo "Missing Python interpreter: ${PYTHON_BIN}" >&2
         echo "Create the virtualenv first, for example: python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt" >&2
+        exit 1
+    fi
+    if ! "${PYTHON_BIN}" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+        echo "Python 3.10 or later is required: ${PYTHON_BIN}" >&2
+        echo "Recreate the virtualenv with Python 3.12, then install requirements.txt." >&2
         exit 1
     fi
     if ! command -v launchctl >/dev/null 2>&1; then
