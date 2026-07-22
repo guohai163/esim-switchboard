@@ -792,7 +792,10 @@ def test_api_endpoints_return_dashboard_data(tmp_path: Path) -> None:
     assert health.json()["device_monitor"]["browser_supported_hint"] == BROWSER_SUPPORTED_HINT
     assert latest_esim.status_code == 200
     assert latest_esim.json()["embedded_total_count"] == 2
+    assert latest_esim.json()["embedded_active_count"] == 1
     assert latest_esim.json()["subscriptions"][0]["remark"] is None
+    active_sub_ids = [item["sub_id"] for item in latest_esim.json()["subscriptions"] if item["is_active"]]
+    assert active_sub_ids == ["1", "7"]
     assert sms.status_code == 200
     assert sms.json()["total"] == 2
     assert sms.json()["items"][0]["display_name"] == "giffgaff sws"

@@ -21,8 +21,31 @@ def test_parse_isub_output_counts_embedded_and_active_once() -> None:
 
     assert snapshot.embedded_total_count == 3
     assert snapshot.embedded_active_count == 1
-    assert [item.sub_id for item in snapshot.subscriptions] == ["7", "5", "6", "9"]
+    assert [item.sub_id for item in snapshot.subscriptions] == ["7", "9", "5", "6"]
     assert next(item for item in snapshot.subscriptions if item.sub_id == "7").is_active is True
+
+
+def test_parse_isub_output_keeps_physical_and_esim_active_together() -> None:
+    output = """
+    SubscriptionController:
+     ActiveSubInfoList:
+      {id=7 simSlotIndex=1 displayName=giffgaff sws carrierName=CHN-UNICOM — giffgaff isEmbedded=true}
+      {id=9 simSlotIndex=0 displayName=CMCC carrierName=CMCC isEmbedded=false}
+    ++++++++++++++++++++++++++++++++
+     AllSubInfoList:
+      {id=5 simSlotIndex=-1 displayName=Club carrierName=没有服务 isEmbedded=true}
+      {id=7 simSlotIndex=1 displayName=giffgaff sws carrierName=CHN-UNICOM — giffgaff isEmbedded=true}
+      {id=9 simSlotIndex=0 displayName=CMCC carrierName=CMCC isEmbedded=false}
+    ++++++++++++++++++++++++++++++++
+    """
+
+    snapshot = parse_isub_output(output)
+
+    assert snapshot.embedded_total_count == 2
+    assert snapshot.embedded_active_count == 1
+    assert [item.sub_id for item in snapshot.subscriptions if item.is_active] == ["7", "9"]
+    assert next(item for item in snapshot.subscriptions if item.sub_id == "7").is_active is True
+    assert next(item for item in snapshot.subscriptions if item.sub_id == "9").is_active is True
 
 
 def test_parse_sms_query_output_handles_commas_and_newlines() -> None:

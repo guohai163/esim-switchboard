@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.2 - 2026-06-25
+
+### Fixed
+- Fixed dual-active SIM parsing so `/api/esim/latest` preserves both the active physical SIM and the active eSIM when the phone reports them together.
+- Fixed the dashboard and switch-confirm overlays to show active eSIM and active physical SIM separately instead of collapsing them into a single "current active" card.
+
+### Docs
+- Clarified the README to explain that the UI now separates active eSIM and active physical SIM details in the status area and switch confirmation flow.
+
 ## v0.1.1 - 2026-06-23
 
 ### Docs

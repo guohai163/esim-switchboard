@@ -247,7 +247,7 @@ def parse_isub_output(output: str) -> EsimSnapshotRecord:
             display_name=entry.display_name,
             carrier_name=entry.carrier_name,
             is_embedded=entry.is_embedded,
-            is_active=entry.sub_id in active_ids,
+            is_active=entry.is_active or entry.sub_id in active_ids,
             sim_slot_index=entry.sim_slot_index,
         )
 
